@@ -11,10 +11,9 @@ Upload all repository files (`setup.sh`, `package.json`, `server.js`, `public/in
 Run this single command on your Linux server (**Ubuntu 20.04/22.04/24.04** or **Debian 11/12**):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME/main/setup.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/thatgoldentiger/AetherPanel/main/setup.sh | sudo bash
 ```
 
-> ⚠️ **Note:** Replace `YOUR_GITHUB_USERNAME` and `YOUR_REPO_NAME` with your actual GitHub username and repository name before running.
 
 ---
 
