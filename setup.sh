@@ -74,12 +74,12 @@ chmod +x /usr/local/bin/playit
 echo "[5/7] Installing panel files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR/public" "$INSTALL_DIR/data/servers"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" 2>/dev/null && pwd )"
-if [ -f "$SCRIPT_DIR/server.js" ] && [ -f "$SCRIPT_DIR/installers.js" ] && [ -f "$SCRIPT_DIR/public/index.html" ]; then
-  cp -f "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/installers.js" "$SCRIPT_DIR/package.json" "$INSTALL_DIR/"
+if [ -f "$SCRIPT_DIR/server.js" ] && [ -f "$SCRIPT_DIR/installers.js" ] && [ -f "$SCRIPT_DIR/players.js" ] && [ -f "$SCRIPT_DIR/public/index.html" ]; then
+  cp -f "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/installers.js" "$SCRIPT_DIR/players.js" "$SCRIPT_DIR/package.json" "$INSTALL_DIR/"
   cp -f "$SCRIPT_DIR/public/index.html" "$INSTALL_DIR/public/"
   cp -f "$SCRIPT_DIR/uninstall.sh" /usr/local/sbin/aetherpanel-uninstall
 else
-  for f in server.js installers.js package.json; do curl -fsSL "$REPO_RAW/$f" -o "$INSTALL_DIR/$f"; done
+  for f in server.js installers.js players.js package.json; do curl -fsSL "$REPO_RAW/$f" -o "$INSTALL_DIR/$f"; done
   curl -fsSL "$REPO_RAW/public/index.html" -o "$INSTALL_DIR/public/index.html"
   curl -fsSL "$REPO_RAW/uninstall.sh" -o /usr/local/sbin/aetherpanel-uninstall
 fi
