@@ -40,7 +40,7 @@ echo "Removing files..."
 rm -f /usr/local/bin/playit
 rm -rf /opt/steamcmd
 if command -v ufw &> /dev/null; then
-  for r in 3000/tcp 25565/tcp 7777/udp 2456:2458/udp; do ufw delete allow "$r" > /dev/null 2>&1; done
+  for r in 3000/tcp 25565/tcp 7777/tcp 2456:2458/udp; do ufw delete allow "$r" > /dev/null 2>&1; done
 fi
 
 if [ "$KEEP" = "1" ]; then
