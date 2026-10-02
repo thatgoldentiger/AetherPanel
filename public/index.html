@@ -66,8 +66,10 @@ button.g{background:#059669}button.r{background:#e11d48}button.y{background:#d97
     <div id="v-settings" class="card hide">
       <b>Theme</b>
       <div class="row" style="margin:8px 0 18px"><button onclick="theme('blue')">Blue</button><button onclick="theme('emerald')">Emerald</button><button onclick="theme('violet')">Violet</button><button onclick="theme('amber')">Amber</button></div>
+      <b>Security</b><div style="margin:8px 0 18px"><button onclick="openDlg('pw')">Change panel password</button></div>
       <b>Start command</b><div class="mut" id="scmd" style="margin:6px 0 18px;font-family:monospace"></div>
       <button class="r" onclick="delServer()">Delete this server and all its files</button>
+      <hr style="border:0;border-top:1px solid var(--bd);margin:20px 0"><b>Danger zone</b><div class="mut" style="margin:6px 0 10px">Removes the panel, Playit and (optionally) every game server from this machine.</div><button class="r" onclick="openDlg('un')">Uninstall AetherPanel</button>
     </div>
   </div>
 </main>
@@ -76,12 +78,23 @@ button.g{background:#059669}button.r{background:#e11d48}button.y{background:#d97
 
 <div id="wiz" class="ov"><div class="box">
   <h3 style="margin-top:0">Create server</h3>
-  <label>Game</label><select id="wg" onchange="wizGame()"><option value="minecraft">Minecraft (Paper, auto-installed)</option><option value="terraria">Terraria</option><option value="valheim">Valheim</option><option value="custom">Custom command</option></select>
+  <label>Game</label><select id="wg" onchange="wizGame()"><option value="minecraft">Minecraft (Java)</option><option value="terraria">Terraria</option><option value="valheim">Valheim</option><option value="custom">Custom command</option></select>
   <label>Name</label><input id="wn" value="My Server">
+  <div id="weng"><label>Software</label><select id="we" onchange="wizVersions()"><option value="paper">Paper (recommended)</option><option value="vanilla">Vanilla</option><option value="purpur">Purpur</option><option value="fabric">Fabric</option></select></div>
+  <div id="wver"><label>Version <span class="mut" id="wvs"></span></label><select id="wv"></select></div>
   <div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label>Port</label><input id="wp" type="number" value="25565"></div><div style="flex:1" id="wrw"><label>RAM (GB)</label><input id="wr" type="number" step="0.5" value="2"></div></div>
-  <div id="wvw"><label>Minecraft version</label><input id="wv" value="1.21.4"><div class="mut" style="margin-top:6px">By creating a Minecraft server you accept the <a class="l" href="https://aka.ms/MinecraftEULA" target="_blank">Minecraft EULA</a>.</div></div>
-  <div id="wcw" class="hide"><label>Start command (runs inside the server's folder; upload the game files in the Files tab)</label><textarea id="wc" rows="3"></textarea></div>
-  <div class="row" style="margin-top:16px;justify-content:space-between"><button onclick="$('wiz').classList.remove('show')">Cancel</button><button class="p" onclick="createServer()">Create</button></div>
+  <div id="wpwd" class="hide"><label>Server password (5-30 letters/numbers)</label><input id="wpw"></div>
+  <div id="weula" class="mut" style="margin-top:8px">By creating a Minecraft server you accept the <a class="l" href="https://aka.ms/MinecraftEULA" target="_blank">Minecraft EULA</a>. Java is downloaded automatically.</div>
+  <div id="wcw" class="hide"><label>Start command (runs inside the server's folder; upload files in the Files tab)</label><textarea id="wc" rows="3"></textarea></div>
+  <div class="row" style="margin-top:16px;justify-content:space-between"><button onclick="$('wiz').classList.remove('show')">Cancel</button><button class="p" id="wgo" onclick="createServer()">Create &amp; download</button></div>
+</div></div>
+
+<div id="dlg" class="ov"><div class="box"><h3 id="dt" style="margin-top:0"></h3>
+  <label>Current panel password</label><input type="password" id="d1">
+  <div id="d2w"><label>New password (8+ characters)</label><input type="password" id="d2"></div>
+  <div id="d3w" class="hide"><label style="color:var(--tx)"><input type="checkbox" id="d3" style="width:auto"> Keep my game servers and worlds (only remove the panel)</label></div>
+  <div id="derr" style="color:#fb7185;margin-top:8px"></div>
+  <div class="row" style="margin-top:14px;justify-content:space-between"><button onclick="$('dlg').classList.remove('show')">Cancel</button><button class="r" id="dgo" onclick="dlgGo()">Confirm</button></div>
 </div></div>
 
 <div id="ed" class="ov"><div class="box" style="max-width:800px"><b id="edname"></b><textarea id="edtx" rows="22" style="margin-top:8px;font:12px monospace;white-space:pre"></textarea>
@@ -184,12 +197,41 @@ function newFolder() { const n = prompt('New folder name:'); if (n) run(api(`/ap
 function uploadFiles(inp) { const fd = new FormData(); [...inp.files].forEach((f) => fd.append('files', f)); run(api(`/api/servers/${cur}/upload?path=${encodeURIComponent(cwd)}`, { method: 'POST', body: fd }).then(loadFiles)); inp.value = ''; }
 
 // ----- wizard / delete -----
-const DEF = { minecraft: [25565, ''], terraria: [7777, './TerrariaServer.bin.x86_64 -port 7777 -maxplayers 8'], valheim: [2456, './valheim_server.x86_64 -name "My Server" -port 2456 -world Dedicated -password changeme123'], custom: [25565, ''] };
-function wizGame() { const g = $('wg').value; $('wp').value = DEF[g][0]; $('wc').value = DEF[g][1]; const mc = g === 'minecraft'; $('wvw').classList.toggle('hide', !mc); $('wrw').classList.toggle('hide', !mc); $('wcw').classList.toggle('hide', mc); }
-function openWizard() { wizGame(); $('wiz').classList.add('show'); }
+const DEF = { minecraft: 25565, terraria: 7777, valheim: 2456, custom: 25565 };
+const show = (id, on) => $(id).classList.toggle('hide', !on);
+function wizGame() {
+  const g = $('wg').value; $('wp').value = DEF[g]; $('wgo').disabled = false;
+  show('weng', g === 'minecraft'); show('wver', g !== 'custom'); show('wrw', g === 'minecraft'); show('weula', g === 'minecraft'); show('wpwd', g === 'valheim'); show('wcw', g === 'custom');
+  if (g !== 'custom') wizVersions();
+}
+async function wizVersions() {
+  const g = $('wg').value, sel = $('wv'); sel.innerHTML = ''; $('wvs').textContent = '(loading...)'; $('wgo').disabled = true;
+  try {
+    const l = await api(`/api/versions?game=${g}&engine=${g === 'minecraft' ? $('we').value : ''}`);
+    sel.innerHTML = l.map((v) => `<option value="${esc(v.value)}">${esc(v.label)}</option>`).join('');
+    $('wvs').textContent = `(${l.length} available)`; $('wgo').disabled = !l.length;
+  } catch (e) { $('wvs').textContent = '(failed: ' + e.message + ')'; }
+}
+function openWizard() { $('wiz').classList.add('show'); wizGame(); }
 function createServer() {
-  run(api('/api/servers', { method: 'POST', body: { game: $('wg').value, name: $('wn').value, port: $('wp').value, ram: $('wr').value, version: $('wv').value, startCmd: $('wc').value } })
+  run(api('/api/servers', { method: 'POST', body: { game: $('wg').value, name: $('wn').value, engine: $('we').value, version: $('wv').value, port: $('wp').value, ram: $('wr').value, password: $('wpw').value, startCmd: $('wc').value } })
     .then((s) => { $('wiz').classList.remove('show'); return loadServers().then(() => selectServer(s.id)); }));
+}
+let dmode = '';
+function openDlg(m) {
+  dmode = m; $('derr').textContent = ''; $('d1').value = $('d2').value = ''; show('d2w', m === 'pw'); show('d3w', m === 'un');
+  $('dt').textContent = m === 'pw' ? 'Change password' : 'Uninstall AetherPanel'; $('dgo').textContent = m === 'pw' ? 'Change' : 'Uninstall'; $('dlg').classList.add('show');
+}
+async function dlgGo() {
+  try {
+    if (dmode === 'pw') { await api('/api/password', { method: 'POST', body: { current: $('d1').value, next: $('d2').value } }); $('dlg').classList.remove('show'); alert('Password changed. Please log in again.'); showLogin(); }
+    else {
+      const keep = $('d3').checked;
+      if (!confirm('This removes AetherPanel from this machine' + (keep ? '.' : ' AND DELETES all game servers and worlds.') + ' Continue?')) return;
+      await api('/api/uninstall', { method: 'POST', body: { password: $('d1').value, keepData: keep } });
+      document.body.innerHTML = '<main><div class="card"><h2>Uninstalling AetherPanel...</h2><p>The panel will go offline in a few seconds. You can close this tab.</p></div></main>';
+    }
+  } catch (e) { $('derr').textContent = e.message; }
 }
 function delServer() { if (confirm('Delete this server and ALL its files? This cannot be undone.')) run(api(`/api/servers/${cur}`, { method: 'DELETE' }).then(() => { if (ws) { ws.onclose = null; ws.close(); ws = null; } cur = null; $('con').textContent = ''; tab('console'); return loadServers(); })); }
 
