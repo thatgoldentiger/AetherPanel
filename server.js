@@ -6,14 +6,17 @@ const fs = require('fs-extra');
 const crypto = require('crypto');
 const multer = require('multer');
 const { spawn, execFile } = require('child_process');
+const inst = require('./installers');
 
 const PORT = process.env.PORT || 3000;
-const PASSWORD = process.env.PANEL_PASSWORD || '';
+const PASS_FILE = path.join(__dirname, '.password');
+const UNINSTALL = '/usr/local/sbin/aetherpanel-uninstall';
+let PASSWORD = process.env.PANEL_PASSWORD || (fs.existsSync(PASS_FILE) ? fs.readFileSync(PASS_FILE, 'utf8').replace(/\r?\n$/, '') : '');
 const SERVERS = path.join(__dirname, 'data', 'servers');
 const CONFIG = path.join(__dirname, 'data', 'config.json');
 
 if (!PASSWORD) {
-    console.error('PANEL_PASSWORD is not set. Start with: PANEL_PASSWORD=yourpass node server.js');
+    console.error('No panel password set. Run setup.sh, or start with: PANEL_PASSWORD=yourpass node server.js');
     process.exit(1);
 }
 fs.ensureDirSync(SERVERS);
@@ -56,6 +59,7 @@ const statusOf = (id) => (installing.has(id) ? 'INSTALLING' : procs.has(id) ? 'O
 const tokens = new Map();
 const fails = new Map();
 const hash = (s) => crypto.createHash('sha256').update(s).digest();
+const eq = (a, b) => crypto.timingSafeEqual(hash(a), hash(b));
 const valid = (t) => !!t && tokens.has(t) && tokens.get(t) > Date.now();
 
 app.post('/api/login', (req, res) => {
@@ -63,7 +67,7 @@ app.post('/api/login', (req, res) => {
     const f = fails.get(ip) || { n: 0, t: Date.now() };
     if (Date.now() - f.t > 600000) { f.n = 0; f.t = Date.now(); }
     if (f.n >= 5) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
-    const ok = crypto.timingSafeEqual(hash(String((req.body || {}).password || '')), hash(PASSWORD));
+    const ok = eq(String((req.body || {}).password || ''), PASSWORD);
     if (!ok) { f.n++; fails.set(ip, f); return res.status(401).json({ error: 'Wrong password' }); }
     const token = crypto.randomBytes(32).toString('hex');
     tokens.set(token, Date.now() + 24 * 3600 * 1000);
@@ -81,7 +85,7 @@ app.param('id', (req, res, next, id) => {
 function start(s) {
     if (procs.has(s.id)) return 'Server is already running';
     if (installing.has(s.id)) return 'Server files are still being downloaded';
-    const child = spawn('exec ' + s.startCmd, { cwd: safe(s.id), shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('exec ' + s.startCmd, { cwd: safe(s.id), shell: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...(s.env || {}) } });
     child.started = Date.now();
     procs.set(s.id, child);
     const out = (d) => log(s.id, d.toString());
@@ -105,31 +109,23 @@ function stop(s, force) {
         if (!c) return resolve();
         c.once('close', resolve);
         if (force) return c.kill('SIGKILL');
-        if (s.game === 'minecraft') { try { c.stdin.write('stop\n'); } catch (e) {} } else c.kill('SIGTERM');
+        const g = { minecraft: 'stop', terraria: 'exit' }[s.game];
+        if (g) { try { c.stdin.write(g + '\n'); } catch (e) {} } else c.kill('SIGTERM');
         setTimeout(() => procs.has(s.id) && c.kill('SIGTERM'), 15000);
         setTimeout(() => procs.has(s.id) && c.kill('SIGKILL'), 30000);
     });
 }
 
-async function installPaper(s) {
+async function installServer(s) {
     installing.add(s.id);
     send(s.id, { type: 'status' });
+    const l = (t) => log(s.id, t);
     try {
-        log(s.id, `[System] Looking up Paper ${s.version}...\n`);
-        const headers = { 'User-Agent': 'AetherPanel/1.0' };
-        const r = await fetch(`https://fill.papermc.io/v3/projects/paper/versions/${s.version}/builds`, { headers });
-        if (!r.ok) throw new Error(`Paper API returned HTTP ${r.status} (is ${s.version} a valid version?)`);
-        const builds = await r.json();
-        const b = builds.find((x) => x.channel === 'STABLE') || builds[0];
-        const url = b && b.downloads && b.downloads['server:default'] && b.downloads['server:default'].url;
-        if (!url) throw new Error('No downloadable build found');
-        log(s.id, `[System] Downloading ${url}\n`);
-        const d = await fetch(url, { headers });
-        if (!d.ok) throw new Error(`Download failed: HTTP ${d.status}`);
-        await fs.writeFile(path.join(safe(s.id), 'server.jar'), Buffer.from(await d.arrayBuffer()));
-        log(s.id, '[System] Paper installed. You can start the server now.\n');
+        l(`[System] Installing ${s.game} ${s.engine || ''} ${s.version}...\n`);
+        await inst.install(s, safe(s.id), l);
+        l('[System] Installation finished. You can start the server now.\n');
     } catch (e) {
-        log(s.id, `[System] Install failed: ${e.message}\n[System] Upload your own server.jar in the Files tab instead.\n`);
+        l(`[System] Install failed: ${e.message}\n[System] You can upload files manually in the Files tab, or delete and recreate the server.\n`);
     }
     installing.delete(s.id);
     send(s.id, { type: 'status' });
@@ -138,32 +134,46 @@ async function installPaper(s) {
 // ---------- servers API ----------
 app.get('/api/servers', (req, res) => res.json(load().map((s) => ({ ...s, status: statusOf(s.id) }))));
 
+app.get('/api/versions', async (req, res) => {
+    try { res.json(await inst.versions(String(req.query.game || ''), String(req.query.engine || ''))); }
+    catch (e) { res.status(502).json({ error: 'Could not fetch version list: ' + e.message }); }
+});
+
 app.post('/api/servers', async (req, res) => {
     try {
         const b = req.body || {};
-        const name = String(b.name || '').replace(/[\r\n]/g, ' ').trim().slice(0, 60);
+        const bad = (m) => res.status(400).json({ error: m });
+        const name = String(b.name || '').replace(/[\r\n]/g, ' ').trim().slice(0, 40);
         const game = ['minecraft', 'terraria', 'valheim', 'custom'].includes(b.game) ? b.game : null;
         const port = parseInt(b.port);
-        const ram = parseFloat(b.ram);
-        const version = String(b.version || '').trim();
-        let startCmd = String(b.startCmd || '').trim().slice(0, 500);
-        if (!name || !game || !(port > 0 && port < 65536)) return res.status(400).json({ error: 'Invalid name, game or port' });
-        if (game === 'minecraft') {
-            if (!/^\d+\.\d+(\.\d+)?$/.test(version) || !(ram >= 0.5 && ram <= 128)) return res.status(400).json({ error: 'Invalid Minecraft version or RAM' });
-            startCmd = `java -Xms512M -Xmx${Math.round(ram * 1024)}M -jar server.jar nogui`;
-        } else if (!startCmd) {
-            return res.status(400).json({ error: 'A start command is required for this game' });
+        if (!name || !game || !(port > 0 && port < 65536)) return bad('Invalid name, game or port');
+        const s = { id: 'srv-' + Date.now(), name, game, engine: '', version: '', port, ram: parseFloat(b.ram) || 0, startCmd: '', env: {} };
+        if (game === 'custom') {
+            s.startCmd = String(b.startCmd || '').trim().slice(0, 500);
+            if (!s.startCmd) return bad('A start command is required');
+        } else {
+            if (!/^[\w .-]+$/.test(name)) return bad('Name may only contain letters, numbers, spaces, dots, dashes and underscores');
+            s.engine = game === 'minecraft' ? String(b.engine || '') : '';
+            s.version = String(b.version || '');
+            let list;
+            try { list = await inst.versions(game, s.engine); } catch (e) { return bad('Could not verify version: ' + e.message); }
+            if (!list.some((v) => v.value === s.version)) return bad('Unknown version');
+            if (game === 'minecraft') {
+                if (!(s.ram >= 0.5 && s.ram <= 128)) return bad('RAM must be between 0.5 and 128 GB');
+                s.java = await inst.javaFor(s.version);
+            }
+            const pw = String(b.password || '');
+            if (game === 'valheim' && !/^[A-Za-z0-9]{5,30}$/.test(pw)) return bad('Valheim password must be 5-30 letters/numbers');
+            Object.assign(s, inst.build(s, pw));
         }
-        const id = 'srv-' + Date.now();
-        await fs.ensureDir(safe(id));
+        await fs.ensureDir(safe(s.id));
         if (game === 'minecraft') {
-            await fs.writeFile(path.join(safe(id), 'server.properties'), `server-port=${port}\nmotd=${name}\nmax-players=20\n`);
-            await fs.writeFile(path.join(safe(id), 'eula.txt'), 'eula=true\n');
+            await fs.writeFile(path.join(safe(s.id), 'server.properties'), `server-port=${port}\nmotd=${name}\nmax-players=20\n`);
+            await fs.writeFile(path.join(safe(s.id), 'eula.txt'), 'eula=true\n');
         }
-        const s = { id, name, game, version: game === 'minecraft' ? version : '', port, ram: ram || 0, startCmd };
         save([...load(), s]);
-        if (game === 'minecraft') installPaper(s);
-        res.status(201).json({ ...s, status: statusOf(id) });
+        if (game !== 'custom') installServer(s);
+        res.status(201).json({ ...s, status: statusOf(s.id) });
     } catch (e) {
         res.status(500).json({ error: 'Failed to create server: ' + e.message });
     }
@@ -270,6 +280,28 @@ const upload = multer({
     })
 });
 app.post('/api/servers/:id/upload', upload.array('files'), (req, res) => res.json({ ok: true, count: (req.files || []).length }));
+
+app.post('/api/password', (req, res) => {
+    const b = req.body || {};
+    if (process.env.PANEL_PASSWORD) return res.status(400).json({ error: 'Password is set by the PANEL_PASSWORD environment variable' });
+    if (!eq(String(b.current || ''), PASSWORD)) return res.status(403).json({ error: 'Current password is wrong' });
+    const n = String(b.next || '');
+    if (n.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    fs.writeFileSync(PASS_FILE, n, { mode: 0o600 });
+    PASSWORD = n;
+    tokens.clear();
+    res.json({ ok: true });
+});
+
+app.post('/api/uninstall', (req, res) => {
+    const b = req.body || {};
+    if (!eq(String(b.password || ''), PASSWORD)) return res.status(403).json({ error: 'Wrong password' });
+    if (!fs.existsSync(UNINSTALL)) return res.status(501).json({ error: 'Uninstaller not found. Run uninstall.sh from a terminal instead.' });
+    execFile('sudo', ['-n', UNINSTALL, '--yes'].concat(b.keepData ? ['--keep-data'] : []), (err, out, errOut) => {
+        if (err) return res.status(500).json({ error: 'Could not start uninstall: ' + (errOut || err.message) });
+        res.json({ ok: true });
+    });
+});
 
 app.use((err, req, res, next) => res.status(500).json({ error: err.message || 'Server error' }));
 
