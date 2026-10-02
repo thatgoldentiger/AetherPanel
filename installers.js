@@ -6,7 +6,7 @@ const { pipeline } = require('stream/promises');
 
 const JAVA_DIR = path.join(__dirname, 'data', 'java');
 const STEAMCMD = '/opt/steamcmd/steamcmd.sh';
-const UA = { 'User-Agent': 'AetherPanel/2.0' };
+const UA = { 'User-Agent': 'AetherPanel/2.1' };
 const cache = new Map();
 const javaLocks = new Map();
 
@@ -14,6 +14,11 @@ async function jget(url) {
     const r = await fetch(url, { headers: UA });
     if (!r.ok) throw new Error(`HTTP ${r.status} from ${url}`);
     return r.json();
+}
+async function jtext(url) {
+    const r = await fetch(url, { headers: UA });
+    if (!r.ok) throw new Error(`HTTP ${r.status} from ${url}`);
+    return r.text();
 }
 async function cached(key, fn) {
     const c = cache.get(key);
@@ -38,10 +43,41 @@ function run(cmd, args, cwd, log) {
 }
 const mojang = () => cached('mojang', () => jget('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'));
 const javaBin = (major) => path.join(JAVA_DIR, String(major), 'bin', 'java');
+const ENGINES = ['vanilla', 'paper', 'purpur', 'fabric', 'forge', 'neoforge', 'customjar'];
+
+// ---------- Forge / NeoForge helpers ----------
+// NeoForge version "21.1.57" -> Minecraft "1.21.1" (NeoForge's own numbering convention)
+function neoToMc(v) {
+    const m = v.match(/^(\d+)\.(\d+)\.(\d+)/);
+    return m ? `1.${m[1]}.${m[2]}` : null;
+}
+async function forgeMcVersions() {
+    const p = await cached('forge:promos', () => jget('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json'));
+    return [...new Set(Object.keys(p.promos).map((k) => k.replace(/-(recommended|latest)$/, '')))];
+}
+async function forgeBuildFor(mc) {
+    const p = await cached('forge:promos', () => jget('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json'));
+    const build = p.promos[`${mc}-recommended`] || p.promos[`${mc}-latest`];
+    if (!build) throw new Error(`No Forge build found for Minecraft ${mc}`);
+    return `${mc}-${build}`;
+}
+async function neoMcVersions() {
+    const xml = await cached('neo:meta', () => jtext('https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml'));
+    const versions = [...xml.matchAll(/<version>([^<]+)<\/version>/g)].map((m) => m[1]);
+    return [...new Set(versions.map(neoToMc).filter(Boolean))];
+}
+async function neoBuildFor(mc) {
+    const xml = await cached('neo:meta', () => jtext('https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml'));
+    const versions = [...xml.matchAll(/<version>([^<]+)<\/version>/g)].map((m) => m[1]).filter((v) => neoToMc(v) === mc);
+    if (!versions.length) throw new Error(`No NeoForge build found for Minecraft ${mc}`);
+    versions.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    return versions[versions.length - 1];
+}
 
 // ---------- version lists (live from the official sources) ----------
 async function versions(game, engine) {
     if (game === 'minecraft') {
+        if (engine === 'customjar') return [{ value: 'custom', label: 'You upload the server.jar yourself' }];
         const releases = (await mojang()).versions.filter((v) => v.type === 'release').map((v) => v.id); // newest first
         let allowed = null;
         if (engine === 'paper') {
@@ -53,6 +89,10 @@ async function versions(game, engine) {
         } else if (engine === 'fabric') {
             const g = await cached('fabric', () => jget('https://meta.fabricmc.net/v2/versions/game'));
             allowed = new Set(g.filter((x) => x.stable).map((x) => x.version));
+        } else if (engine === 'forge') {
+            allowed = new Set(await forgeMcVersions());
+        } else if (engine === 'neoforge') {
+            allowed = new Set(await neoMcVersions());
         } else if (engine !== 'vanilla') throw new Error('Unknown Minecraft software');
         return releases.filter((v) => !allowed || allowed.has(v)).map((v) => ({ value: v, label: v }));
     }
@@ -63,6 +103,7 @@ async function versions(game, engine) {
             return { value: n, label: num ? `${num[0]}.${num[1]}.${num[2]}.${num[3]} (${n.replace(/^terraria-server-|\.zip$/g, '')})` : n };
         });
     }
+    if (game === 'tmodloader') return [{ value: 'latest', label: 'Latest stable (via Steam)' }];
     if (game === 'valheim') return [{ value: 'public', label: 'Latest (Steam public branch)' }];
     throw new Error('Unknown game');
 }
@@ -103,13 +144,20 @@ function ensureJava(major, log) {
     return p;
 }
 
-// ---------- start commands ----------
-function build(o, password) {
+// ---------- start commands (defaults; the user can edit these per server afterwards) ----------
+function build(o, extra) {
+    extra = extra || {};
     const mb = Math.round(o.ram * 1024);
-    if (o.game === 'minecraft') return { startCmd: `${javaBin(o.java)} -Xms${Math.min(512, mb)}M -Xmx${mb}M -jar server.jar nogui`, env: {} };
-    if (o.game === 'terraria') return { startCmd: `./TerrariaServer.bin.x86_64 -port ${o.port} -maxplayers 8 -world ./worlds/world.wld -worldname "${o.name}" -autocreate 2`, env: {} };
+    if (o.game === 'minecraft') return { startCmd: `${javaBin(o.java)} -Xms${Math.min(512, mb)}M -Xmx${mb}M -jar server.jar nogui`, stopCmd: 'stop', env: {} };
+    if (o.game === 'terraria') {
+        const size = { small: 1, medium: 2, large: 3 }[extra.worldSize] || 2;
+        const evil = extra.worldType === 'corrupt' ? ' -setworldevil 0' : extra.worldType === 'crimson' ? ' -setworldevil 1' : '';
+        return { startCmd: `./TerrariaServer.bin.x86_64 -port ${o.port} -maxplayers 8 -world ./worlds/world.wld -worldname "${o.name}" -autocreate ${size}${evil}`, stopCmd: 'exit', env: {} };
+    }
+    if (o.game === 'tmodloader') return { startCmd: `bash start-tModLoaderServer.sh -server -steam_p ${o.port} -worldname "${o.name}" -autocreate 2`, stopCmd: 'exit', env: {} };
     return {
-        startCmd: `./valheim_server.x86_64 -nographics -batchmode -name "${o.name}" -port ${o.port} -world "Dedicated" -password "${password}" -public 0`,
+        startCmd: `./valheim_server.x86_64 -nographics -batchmode -name "${o.name}" -port ${o.port} -world "Dedicated" -password "${extra.password}" -public 0 -savedir ./save`,
+        stopCmd: '',
         env: { LD_LIBRARY_PATH: './linux64', SteamAppId: '892970' }
     };
 }
@@ -117,8 +165,11 @@ function build(o, password) {
 // ---------- game installers ----------
 async function installMinecraft(s, dir, log) {
     const v = s.version;
-    let url;
-    if (s.engine === 'paper') {
+    let url, extraStart = null;
+    if (s.engine === 'customjar') {
+        log('[System] No download needed - upload your own server.jar in the Files tab, then press Start.\n');
+        return null;
+    } else if (s.engine === 'paper') {
         const b = await jget(`https://fill.papermc.io/v3/projects/paper/versions/${v}/builds`);
         const x = b.find((y) => y.channel === 'STABLE') || b[0];
         url = x && x.downloads['server:default'].url;
@@ -127,6 +178,29 @@ async function installMinecraft(s, dir, log) {
     } else if (s.engine === 'fabric') {
         const [l, i] = await Promise.all([jget('https://meta.fabricmc.net/v2/versions/loader'), jget('https://meta.fabricmc.net/v2/versions/installer')]);
         url = `https://meta.fabricmc.net/v2/versions/loader/${v}/${(l.find((x) => x.stable) || l[0]).version}/${(i.find((x) => x.stable) || i[0]).version}/server/jar`;
+    } else if (s.engine === 'forge' || s.engine === 'neoforge') {
+        const isNeo = s.engine === 'neoforge';
+        const full = isNeo ? await neoBuildFor(v) : await forgeBuildFor(v); // neo: "21.1.57"; forge: "1.21.1-51.0.33"
+        const base = isNeo ? 'https://maven.neoforged.net/releases/net/neoforged/neoforge' : 'https://maven.minecraftforge.net/net/minecraftforge/forge';
+        const jarName = isNeo ? `neoforge-${full}-installer.jar` : `forge-${full}-installer.jar`;
+        const installerUrl = `${base}/${full}/${jarName}`;
+        log(`[System] Downloading ${s.engine} installer (${full})...\n`);
+        const installerPath = path.join(dir, jarName);
+        await download(installerUrl, installerPath);
+        log('[System] Running installer (this can take a minute)...\n');
+        await run(javaBin(s.java), ['-jar', jarName, '--installServer'], dir, log);
+        await fs.remove(installerPath).catch(() => {});
+        await fs.remove(installerPath + '.log').catch(() => {});
+        if (await fs.pathExists(path.join(dir, 'run.sh'))) {
+            await fs.chmod(path.join(dir, 'run.sh'), 0o755).catch(() => {});
+            extraStart = { startCmd: `bash run.sh` };
+        } else {
+            const files = await fs.readdir(dir);
+            const jar = files.find((f) => /^(forge|neoforge)-.*\.jar$/i.test(f) && !/installer/i.test(f));
+            if (jar) extraStart = { startCmd: `${javaBin(s.java)} -Xms${Math.min(512, Math.round(s.ram * 1024))}M -Xmx${Math.round(s.ram * 1024)}M -jar ${jar} nogui` };
+            else log('[System] Could not detect the generated launch script or jar. Check the Files tab and set the start command in Settings.\n');
+        }
+        return extraStart;
     } else {
         const e = (await mojang()).versions.find((x) => x.id === v);
         if (!e) throw new Error('Version not found at Mojang');
@@ -135,6 +209,7 @@ async function installMinecraft(s, dir, log) {
     if (!url) throw new Error(`No ${s.engine} build available for ${v}`);
     log(`[System] Downloading ${s.engine} ${v}...\n`);
     await download(url, path.join(dir, 'server.jar'));
+    return null;
 }
 
 async function installTerraria(s, dir, log) {
@@ -151,6 +226,20 @@ async function installTerraria(s, dir, log) {
     } finally { await fs.remove(tmp); }
     for (const f of await fs.readdir(dir)) if (f.startsWith('TerrariaServer')) await fs.chmod(path.join(dir, f), 0o755);
     await fs.ensureDir(path.join(dir, 'worlds'));
+    return null;
+}
+
+async function installTmodloader(s, dir, log) {
+    if (!fs.existsSync(STEAMCMD)) throw new Error('SteamCMD is not installed (re-run setup.sh)');
+    const args = ['+force_install_dir', dir, '+login', 'anonymous', '+app_update', '1281930', 'validate', '+quit'];
+    log('[System] Downloading tModLoader dedicated server via SteamCMD (experimental support)...\n');
+    try { await run(STEAMCMD, args, path.dirname(STEAMCMD), log); }
+    catch (e) { log('[System] SteamCMD failed once, retrying...\n'); await run(STEAMCMD, args, path.dirname(STEAMCMD), log); }
+    if (await fs.pathExists(path.join(dir, 'start-tModLoaderServer.sh'))) await fs.chmod(path.join(dir, 'start-tModLoaderServer.sh'), 0o755).catch(() => {});
+    else log('[System] Did not find start-tModLoaderServer.sh after install - check the Files tab and set the start command in Settings if it differs.\n');
+    await fs.ensureDir(path.join(dir, 'Mods'));
+    log('[System] Upload .tmod mod files into the Mods folder (Files tab), then enable them with the enablemods command.\n');
+    return null;
 }
 
 async function installValheim(s, dir, log) {
@@ -159,15 +248,19 @@ async function installValheim(s, dir, log) {
     log('[System] Downloading Valheim Dedicated Server via SteamCMD (about 1-2 GB, please wait)...\n');
     try { await run(STEAMCMD, args, path.dirname(STEAMCMD), log); }
     catch (e) { log('[System] SteamCMD failed once, retrying...\n'); await run(STEAMCMD, args, path.dirname(STEAMCMD), log); }
+    await fs.ensureDir(path.join(dir, 'save'));
+    return null;
 }
 
 async function install(s, dir, log) {
-    if (s.game === 'minecraft') { await ensureJava(s.java, log); await installMinecraft(s, dir, log); }
-    else if (s.game === 'terraria') await installTerraria(s, dir, log);
-    else if (s.game === 'valheim') await installValheim(s, dir, log);
+    if (s.game === 'minecraft') { await ensureJava(s.java, log); return installMinecraft(s, dir, log); }
+    if (s.game === 'terraria') return installTerraria(s, dir, log);
+    if (s.game === 'tmodloader') return installTmodloader(s, dir, log);
+    if (s.game === 'valheim') return installValheim(s, dir, log);
+    return null;
 }
 
-module.exports = { versions, javaFor, ensureJava, build, install };
+module.exports = { versions, javaFor, ensureJava, build, install, ENGINES };
 
 if (require.main === module && process.argv[2] === 'prefetch') {
     (async () => {
