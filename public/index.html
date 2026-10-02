@@ -14,21 +14,27 @@ h1{font-size:17px;margin:0;color:var(--ac)}main{max-width:1000px;margin:0 auto;p
 button,select,input,textarea{font:inherit;color:var(--tx);background:#0f172a;border:1px solid var(--bd);border-radius:7px;padding:7px 11px}
 button{cursor:pointer;background:#1e293b}button:hover{border-color:var(--ac)}button.p{background:var(--ac);border-color:var(--ac);color:#fff}
 button.g{background:#059669}button.r{background:#e11d48}button.y{background:#d97706}button:disabled{opacity:.4;cursor:not-allowed}
+button.sm{padding:3px 8px;font-size:12px}
 .tabs button{border-radius:7px 7px 0 0}.tabs button.on{background:var(--ac);color:#fff}
 #con{background:#020617;height:340px;overflow:auto;padding:10px;margin:0;font:12px monospace;white-space:pre-wrap;word-break:break-all;border-radius:7px}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.stats div{background:#0f172a;border-radius:8px;padding:10px}.stats b{display:block;font-size:18px;margin-top:3px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.stats div{background:#0f172a;border-radius:8px;padding:10px}.stats b{display:block;font-size:18px;margin-top:3px}
 .mut{color:var(--mut);font-size:12px}table{width:100%;border-collapse:collapse}td,th{padding:7px;text-align:left;border-bottom:1px solid var(--bd)}
 .badge{padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;background:#334155}.ONLINE{background:#064e3b;color:#6ee7b7}.INSTALLING{background:#78350f;color:#fcd34d}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:14px;z-index:9}.ov.show{display:flex}
-.box{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:20px;width:100%;max-width:460px}.box label{display:block;margin:10px 0 3px;color:var(--mut);font-size:12px}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow:auto}.box label{display:block;margin:10px 0 3px;color:var(--mut);font-size:12px}
 .box input,.box select,.box textarea{width:100%}.hide{display:none!important}a.l{color:var(--ac);cursor:pointer}
+.visually-hidden{position:absolute;opacity:0;width:1px;height:1px;overflow:hidden;pointer-events:none}
+#selrow{display:flex;gap:8px;overflow-x:auto;max-width:60vw;padding:2px}
+.sbtn{display:flex;align-items:center;gap:6px;white-space:nowrap;background:#0f172a;border:1px solid var(--bd);border-radius:20px;padding:5px 12px 5px 5px;cursor:pointer}
+.sbtn.on{border-color:var(--ac);background:#132036}.sbtn img,.sbtn .em{width:22px;height:22px;border-radius:50%;object-fit:cover;display:flex;align-items:center;justify-content:center;background:#1e293b;font-size:14px}
+.icon-lg{width:56px;height:56px;border-radius:12px;object-fit:cover;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:28px}
 </style>
 </head>
 <body>
 <header>
   <h1>AetherPanel</h1>
   <div class="row">
-    <select id="sel" onchange="selectServer(this.value)"></select>
+    <div id="selrow"></div>
     <button class="p" onclick="openWizard()">+ New Server</button>
     <button onclick="logout()">Log out</button>
   </div>
@@ -46,30 +52,49 @@ button.g{background:#059669}button.r{background:#e11d48}button.y{background:#d97
         <button onclick="power('kill')">Kill</button>
       </div>
     </div>
-    <div class="tabs row"><button id="t-console" class="on" onclick="tab('console')">Console</button><button id="t-files" onclick="tab('files')">Files</button><button id="t-settings" onclick="tab('settings')">Settings</button></div>
+    <div class="tabs row"><button id="t-console" class="on" onclick="tab('console')">Console</button><button id="t-players" onclick="tab('players')">Players</button><button id="t-files" onclick="tab('files')">Files</button><button id="t-settings" onclick="tab('settings')">Settings</button></div>
 
     <div id="v-console" class="card">
-      <div class="stats"><div class="mut">CPU<b id="cpu">-</b></div><div class="mut">RAM<b id="ram">-</b></div><div class="mut">Uptime<b id="up">-</b></div></div>
+      <div class="stats"><div class="mut">CPU<b id="cpu">-</b></div><div class="mut">RAM<b id="ram">-</b></div><div class="mut">TPS<b id="tps">-</b></div><div class="mut">Uptime<b id="up">-</b></div></div>
       <canvas id="graph" width="900" height="80" style="width:100%;height:80px;margin:12px 0"></canvas>
       <pre id="con"></pre>
       <form class="row" style="margin-top:8px;flex-wrap:nowrap" onsubmit="sendCmd(event)"><input id="cmd" style="flex:1" placeholder="Type a command and press Enter" autocomplete="off"><button class="p">Send</button></form>
     </div>
 
+    <div id="v-players" class="card hide">
+      <p id="pnote" class="mut"></p>
+      <b>Online players</b>
+      <table style="margin:8px 0 18px"><thead><tr><th>Name</th><th>Info</th><th></th></tr></thead><tbody id="ponline"></tbody></table>
+      <b id="popslabel">Operators</b>
+      <table style="margin:8px 0 18px"><thead><tr><th>Name</th><th>Info</th><th></th></tr></thead><tbody id="pops"></tbody></table>
+      <b>Banned</b>
+      <table style="margin:8px 0"><thead><tr><th>Name</th><th>Info</th><th></th></tr></thead><tbody id="pbans"></tbody></table>
+    </div>
+
     <div id="v-files" class="card hide">
       <div class="row" style="justify-content:space-between;margin-bottom:8px">
         <div><button onclick="goUp()">&uarr; Up</button> <span class="mut" id="cwd"></span></div>
-        <div class="row"><button onclick="newFile()">New file</button><button onclick="newFolder()">New folder</button><button class="p" onclick="$('up').click()">Upload</button><input type="file" id="up" multiple class="hide" onchange="uploadFiles(this)"></div>
+        <div class="row"><button onclick="newFile()">New file</button><button onclick="newFolder()">New folder</button><button class="p" onclick="$('up').click()">Upload</button><input type="file" id="up" multiple class="visually-hidden" onchange="uploadFiles(this)" tabindex="-1"></div>
       </div>
       <table><thead><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr></thead><tbody id="ftb"></tbody></table>
     </div>
 
     <div id="v-settings" class="card hide">
+      <b>Server name</b>
+      <div class="row" style="margin:8px 0 18px"><input id="rname" style="flex:1"><button class="p" onclick="renameServer()">Save</button></div>
+      <b>Server icon</b>
+      <div class="row" style="margin:8px 0 18px"><span id="icurrent" class="icon-lg"></span><button onclick="$('icon').click()">Change icon</button><input type="file" id="icon" accept="image/*" class="visually-hidden" tabindex="-1" onchange="uploadIcon(this)"></div>
       <b>Theme</b>
       <div class="row" style="margin:8px 0 18px"><button onclick="theme('blue')">Blue</button><button onclick="theme('emerald')">Emerald</button><button onclick="theme('violet')">Violet</button><button onclick="theme('amber')">Amber</button></div>
-      <b>Security</b><div style="margin:8px 0 18px"><button onclick="openDlg('pw')">Change panel password</button></div>
-      <b>Start command</b><div class="mut" id="scmd" style="margin:6px 0 18px;font-family:monospace"></div>
-      <button class="r" onclick="delServer()">Delete this server and all its files</button>
-      <hr style="border:0;border-top:1px solid var(--bd);margin:20px 0"><b>Danger zone</b><div class="mut" style="margin:6px 0 10px">Removes the panel, Playit and (optionally) every game server from this machine.</div><button class="r" onclick="openDlg('un')">Uninstall AetherPanel</button>
+      <b>Panel security</b><div style="margin:8px 0 18px"><button onclick="openDlg('pw')">Change panel password</button></div>
+      <b>Start command</b><textarea id="scmd" rows="2" style="margin:6px 0 8px;font-family:monospace"></textarea>
+      <b>Stop command</b> <span class="mut">(sent to the console when you click Stop; blank force-terminates)</span><input id="stcmd" style="margin:6px 0 14px;font-family:monospace">
+      <div class="row" style="margin-bottom:18px"><button class="p" onclick="saveCommands()">Save commands</button></div>
+      <hr style="border:0;border-top:1px solid var(--bd);margin:20px 0"><b>Danger zone</b>
+      <div class="mut" style="margin:6px 0 10px">Deleting a server removes it and all its files permanently.</div>
+      <div class="row"><button class="r" onclick="delServer()">Delete this server and all its files</button></div>
+      <div class="mut" style="margin:16px 0 10px">This removes the whole panel, Playit and (optionally) every game server from this machine.</div>
+      <div class="row"><button class="r" onclick="openDlg('un')">Uninstall AetherPanel</button></div>
     </div>
   </div>
 </main>
@@ -78,11 +103,30 @@ button.g{background:#059669}button.r{background:#e11d48}button.y{background:#d97
 
 <div id="wiz" class="ov"><div class="box">
   <h3 style="margin-top:0">Create server</h3>
-  <label>Game</label><select id="wg" onchange="wizGame()"><option value="minecraft">Minecraft (Java)</option><option value="terraria">Terraria</option><option value="valheim">Valheim</option><option value="custom">Custom command</option></select>
+  <label>Game</label><select id="wg" onchange="wizGame()">
+    <option value="minecraft">Minecraft (Java)</option>
+    <option value="terraria">Terraria</option>
+    <option value="tmodloader">Terraria + tModLoader (experimental)</option>
+    <option value="valheim">Valheim</option>
+    <option value="custom">Custom command</option>
+  </select>
   <label>Name</label><input id="wn" value="My Server">
-  <div id="weng"><label>Software</label><select id="we" onchange="wizVersions()"><option value="paper">Paper (recommended)</option><option value="vanilla">Vanilla</option><option value="purpur">Purpur</option><option value="fabric">Fabric</option></select></div>
+  <div id="weng"><label>Software</label><select id="we" onchange="wizVersions()">
+    <option value="paper">Paper (recommended)</option>
+    <option value="vanilla">Vanilla</option>
+    <option value="purpur">Purpur</option>
+    <option value="fabric">Fabric</option>
+    <option value="forge">Forge</option>
+    <option value="neoforge">NeoForge</option>
+    <option value="customjar">Custom (I'll upload my own server.jar)</option>
+  </select></div>
   <div id="wver"><label>Version <span class="mut" id="wvs"></span></label><select id="wv"></select></div>
+  <div id="wjava" class="hide"><label>Java version for your jar</label><select id="wj"><option value="21">Java 21</option><option value="17">Java 17</option><option value="8">Java 8</option></select></div>
   <div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label>Port</label><input id="wp" type="number" value="25565"></div><div style="flex:1" id="wrw"><label>RAM (GB)</label><input id="wr" type="number" step="0.5" value="2"></div></div>
+  <div id="wworld" class="hide row" style="flex-wrap:nowrap">
+    <div style="flex:1"><label>World size</label><select id="wws"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></div>
+    <div style="flex:1"><label>World type</label><select id="wwt"><option value="random">Random</option><option value="corrupt">Corruption</option><option value="crimson">Crimson</option></select></div>
+  </div>
   <div id="wpwd" class="hide"><label>Server password (5-30 letters/numbers)</label><input id="wpw"></div>
   <div id="weula" class="mut" style="margin-top:8px">By creating a Minecraft server you accept the <a class="l" href="https://aka.ms/MinecraftEULA" target="_blank">Minecraft EULA</a>. Java is downloaded automatically.</div>
   <div id="wcw" class="hide"><label>Start command (runs inside the server's folder; upload files in the Files tab)</label><textarea id="wc" rows="3"></textarea></div>
@@ -103,7 +147,9 @@ button.g{background:#059669}button.r{background:#e11d48}button.y{background:#d97
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ICON = { minecraft: '\u26cf\ufe0f', terraria: '\ud83c\udf33', tmodloader: '\ud83e\udde9', valheim: '\u2694\ufe0f', custom: '\u2699\ufe0f' };
 let token = localStorage.getItem('ap_token'), cur = localStorage.getItem('ap_cur'), servers = [], ws = null, cwd = '', editing = '', hist = [];
+let upStart = null, upSecs = 0, upTimer = null;
 
 async function api(url, opt = {}) {
   opt.headers = Object.assign({ 'x-token': token || '' }, opt.headers || {});
@@ -125,17 +171,20 @@ async function doLogin(e) {
 function logout() { showLogin(); }
 
 async function init() { $('app').classList.remove('hide'); await loadServers(); }
+function icon(s) { return s.icon ? `<img src="${s.icon}">` : `<span class="em">${ICON[s.game] || '\ud83c\udfae'}</span>`; }
 async function loadServers() {
   servers = await api('/api/servers');
   if (!servers.find((s) => s.id === cur)) cur = servers[0] && servers[0].id;
-  $('sel').innerHTML = servers.map((s) => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+  $('selrow').innerHTML = servers.map((s) => `<button class="sbtn ${s.id === cur ? 'on' : ''}" onclick="selectServer('${s.id}')">${icon(s)}${esc(s.name)}</button>`).join('');
   $('empty').classList.toggle('hide', servers.length > 0); $('srv').classList.toggle('hide', !servers.length);
   const s = servers.find((x) => x.id === cur); if (!s) return;
   $('sname').textContent = s.name; $('sbadge').textContent = s.status; $('sbadge').className = 'badge ' + s.status;
-  $('smeta').textContent = `${s.game}${s.version ? ' ' + s.version : ''} - port ${s.port}`; $('scmd').textContent = s.startCmd;
+  $('smeta').textContent = `${s.game}${s.engine ? ' (' + s.engine + ')' : ''}${s.version ? ' ' + s.version : ''} - port ${s.port}`;
+  $('rname').value = s.name; $('scmd').value = s.startCmd || ''; $('stcmd').value = s.stopCmd || '';
+  $('icurrent').innerHTML = icon(s);
   if (!ws && token && cur) connectWs();
 }
-function selectServer(id) { cur = id; localStorage.setItem('ap_cur', id); cwd = ''; hist = []; connectWs(); loadServers(); if (!$('v-files').classList.contains('hide')) loadFiles(); }
+function selectServer(id) { cur = id; localStorage.setItem('ap_cur', id); cwd = ''; hist = []; stopUptime(); connectWs(); loadServers(); if (!$('v-files').classList.contains('hide')) loadFiles(); if (!$('v-players').classList.contains('hide')) loadPlayers(); }
 
 function add(t) { const c = $('con'); const stick = c.scrollTop + c.clientHeight >= c.scrollHeight - 30; c.textContent += t.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ''); if (c.textContent.length > 200000) c.textContent = c.textContent.slice(-150000); if (stick) c.scrollTop = c.scrollHeight; }
 function connectWs() {
@@ -149,19 +198,29 @@ function sendCmd(e) { e.preventDefault(); const v = $('cmd').value.trim(); if (v
 function power(a) { if (a === 'kill' && !confirm('Force kill? Unsaved world data may be lost.')) return; run(api(`/api/servers/${cur}/power`, { method: 'POST', body: { action: a } }).then(loadServers)); }
 
 function tab(t) {
-  ['console', 'files', 'settings'].forEach((x) => { $('v-' + x).classList.toggle('hide', x !== t); $('t-' + x).classList.toggle('on', x === t); });
+  ['console', 'players', 'files', 'settings'].forEach((x) => { $('v-' + x).classList.toggle('hide', x !== t); $('t-' + x).classList.toggle('on', x === t); });
   if (t === 'files') loadFiles();
+  if (t === 'players') loadPlayers();
 }
 function theme(t) { document.documentElement.dataset.theme = t; localStorage.setItem('ap_theme', t); }
 theme(localStorage.getItem('ap_theme') || 'blue');
 
-// ----- stats -----
+// ----- stats (CPU/RAM poll every 3s; uptime ticks locally so it doesn't need a refetch every second) -----
 const fmtUp = (s) => (s >= 3600 ? Math.floor(s / 3600) + 'h ' : '') + Math.floor((s % 3600) / 60) + 'm ' + (s % 60) + 's';
+function stopUptime() { clearInterval(upTimer); upTimer = null; upStart = null; $('up').textContent = '-'; }
+function tickUptime() {
+  if (upStart == null) return;
+  upSecs = Math.floor((Date.now() - upStart) / 1000);
+  $('up').textContent = fmtUp(upSecs);
+  clearTimeout(tickUptime._t);
+  tickUptime._t = setTimeout(tickUptime, upSecs < 60 ? 1000 : 15000);
+}
 async function pollStats() {
   if (!token || !cur) return;
   try {
     const j = await api(`/api/servers/${cur}/stats`);
-    $('cpu').textContent = j.online ? j.cpu.toFixed(1) + '%' : '-'; $('ram').textContent = j.online ? j.ramMB + ' MB' : '-'; $('up').textContent = j.online ? fmtUp(j.uptime) : '-';
+    $('cpu').textContent = j.online ? j.cpu.toFixed(1) + '%' : '-'; $('ram').textContent = j.online ? j.ramMB + ' MB' : '-';
+    if (j.online) { if (upStart == null) { upStart = j.startedAt; tickUptime(); } } else stopUptime();
     hist.push(j.online ? j.cpu : 0); if (hist.length > 60) hist.shift(); draw();
     const s = servers.find((x) => x.id === cur); if (s && (s.status === 'ONLINE') !== j.online) loadServers();
   } catch (e) {}
@@ -172,6 +231,33 @@ function draw() {
   hist.forEach((v, i) => { const px = (i / 59) * c.width, py = c.height - (v / max) * (c.height - 6) - 3; i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke();
 }
 setInterval(pollStats, 3000);
+
+// ----- players -----
+async function loadPlayers() {
+  if (!cur) return;
+  try {
+    const r = await api(`/api/servers/${cur}/players`);
+    $('tps').textContent = r.tps == null ? 'N/A' : r.tps;
+    $('pnote').textContent = r.note || '';
+    $('popslabel').textContent = r.opsLabel || 'Operators';
+    const row = (p, buttons) => `<tr><td>${esc(p.name)}</td><td class="mut">${esc(p.info || '')}</td><td class="row">${buttons}</td></tr>`;
+    const btn = (label, cls, action, id, name) => `<button class="sm ${cls || ''}" onclick="pAction('${action}','${esc(id).replace(/'/g, "\\'")}','${esc(name).replace(/'/g, "\\'")}')">${label}</button>`;
+    $('ponline').innerHTML = r.online.map((p) => row(p, [
+      r.caps.kick ? btn('Kick', 'y', 'kick', p.id, p.name) : '',
+      r.caps.ban ? btn('Ban', 'r', 'ban', p.id, p.name) : '',
+      r.caps.op ? btn('Op', '', 'op', p.id, p.name) : ''
+    ].join(' '))).join('') || '<tr><td colspan="3" class="mut">No one online</td></tr>';
+    $('pops').innerHTML = r.ops.map((p) => row(p, r.caps.op ? btn('Remove', '', 'deop', p.id, p.name) : '')).join('') || '<tr><td colspan="3" class="mut">None</td></tr>';
+    $('pbans').innerHTML = r.bans.map((p) => row(p, btn('Unban', 'g', 'pardon', p.id, p.name))).join('') || '<tr><td colspan="3" class="mut">None</td></tr>';
+  } catch (e) { $('pnote').textContent = e.message; }
+}
+function pAction(action, id, name) {
+  let reason = '';
+  if (action === 'kick' || action === 'ban') reason = prompt(`Reason for ${action} (optional, may be ignored by this game):`, '') || '';
+  if (reason === null) return;
+  run(api(`/api/servers/${cur}/players/action`, { method: 'POST', body: { action, id, name, reason } }).then(loadPlayers));
+}
+setInterval(() => { if (!$('v-players').classList.contains('hide')) loadPlayers(); }, 5000);
 
 // ----- files -----
 const join = (a, b) => (a ? a + '/' : '') + b;
@@ -194,18 +280,36 @@ async function openFile(p) { try { const j = await api(`/api/servers/${cur}/file
 function saveFile() { run(api(`/api/servers/${cur}/files/save`, { method: 'POST', body: { filePath: editing, content: $('edtx').value } }).then(() => { $('ed').classList.remove('show'); loadFiles(); })); }
 function newFile() { const n = prompt('New file name:'); if (n) { editing = join(cwd, n.trim()); $('edname').textContent = '/' + editing; $('edtx').value = ''; $('ed').classList.add('show'); } }
 function newFolder() { const n = prompt('New folder name:'); if (n) run(api(`/api/servers/${cur}/files/mkdir`, { method: 'POST', body: { path: join(cwd, n.trim()) } }).then(loadFiles)); }
-function uploadFiles(inp) { const fd = new FormData(); [...inp.files].forEach((f) => fd.append('files', f)); run(api(`/api/servers/${cur}/upload?path=${encodeURIComponent(cwd)}`, { method: 'POST', body: fd }).then(loadFiles)); inp.value = ''; }
+function uploadFiles(inp) {
+  if (!inp.files || !inp.files.length) return;
+  const fd = new FormData(); [...inp.files].forEach((f) => fd.append('files', f));
+  run(api(`/api/servers/${cur}/upload?path=${encodeURIComponent(cwd)}`, { method: 'POST', body: fd }).then(loadFiles));
+  inp.value = '';
+}
+
+// ----- settings: rename / commands / icon -----
+function renameServer() { run(api(`/api/servers/${cur}`, { method: 'PATCH', body: { name: $('rname').value } }).then(loadServers)); }
+function saveCommands() { run(api(`/api/servers/${cur}`, { method: 'PATCH', body: { startCmd: $('scmd').value, stopCmd: $('stcmd').value } }).then(() => { loadServers(); alert('Saved. Restart the server for a new start command to take effect.'); })); }
+function uploadIcon(inp) {
+  if (!inp.files || !inp.files[0]) return;
+  const fd = new FormData(); fd.append('icon', inp.files[0]);
+  run(api(`/api/servers/${cur}/icon`, { method: 'POST', body: fd }).then(loadServers));
+  inp.value = '';
+}
 
 // ----- wizard / delete -----
-const DEF = { minecraft: 25565, terraria: 7777, valheim: 2456, custom: 25565 };
+const DEF = { minecraft: 25565, terraria: 7777, tmodloader: 7777, valheim: 2456, custom: 25565 };
 const show = (id, on) => $(id).classList.toggle('hide', !on);
 function wizGame() {
   const g = $('wg').value; $('wp').value = DEF[g]; $('wgo').disabled = false;
-  show('weng', g === 'minecraft'); show('wver', g !== 'custom'); show('wrw', g === 'minecraft'); show('weula', g === 'minecraft'); show('wpwd', g === 'valheim'); show('wcw', g === 'custom');
+  show('weng', g === 'minecraft'); show('wver', g !== 'custom'); show('wrw', g === 'minecraft'); show('weula', g === 'minecraft');
+  show('wpwd', g === 'valheim'); show('wcw', g === 'custom'); show('wworld', g === 'terraria' || g === 'tmodloader');
   if (g !== 'custom') wizVersions();
 }
+function wizEngine() { show('wjava', $('wg').value === 'minecraft' && $('we').value === 'customjar'); }
 async function wizVersions() {
   const g = $('wg').value, sel = $('wv'); sel.innerHTML = ''; $('wvs').textContent = '(loading...)'; $('wgo').disabled = true;
+  wizEngine();
   try {
     const l = await api(`/api/versions?game=${g}&engine=${g === 'minecraft' ? $('we').value : ''}`);
     sel.innerHTML = l.map((v) => `<option value="${esc(v.value)}">${esc(v.label)}</option>`).join('');
@@ -214,8 +318,11 @@ async function wizVersions() {
 }
 function openWizard() { $('wiz').classList.add('show'); wizGame(); }
 function createServer() {
-  run(api('/api/servers', { method: 'POST', body: { game: $('wg').value, name: $('wn').value, engine: $('we').value, version: $('wv').value, port: $('wp').value, ram: $('wr').value, password: $('wpw').value, startCmd: $('wc').value } })
-    .then((s) => { $('wiz').classList.remove('show'); return loadServers().then(() => selectServer(s.id)); }));
+  run(api('/api/servers', { method: 'POST', body: {
+    game: $('wg').value, name: $('wn').value, engine: $('we').value, version: $('wv').value, java: $('wj').value,
+    port: $('wp').value, ram: $('wr').value, password: $('wpw').value, startCmd: $('wc').value,
+    worldSize: $('wws').value, worldType: $('wwt').value
+  } }).then((s) => { $('wiz').classList.remove('show'); return loadServers().then(() => selectServer(s.id)); }));
 }
 let dmode = '';
 function openDlg(m) {
