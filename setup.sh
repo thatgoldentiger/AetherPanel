@@ -57,16 +57,17 @@ mkdir -p "$INSTALL_DIR/public"
 mkdir -p "$INSTALL_DIR/data/servers"
 
 # Copy local repository files if setup.sh is run from inside cloned repo
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_RAW="https://raw.githubusercontent.com/thatgoldentiger/AetherPanel/main"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" 2>/dev/null && pwd )"
+
 if [ -f "$SCRIPT_DIR/server.js" ]; then
     cp -f "$SCRIPT_DIR/server.js" "$INSTALL_DIR/"
-    cp -f "$SCRIPT_DIR/package.json" "$INSTALL_DIR/"
-fi
-
-if [ -f "$SCRIPT_DIR/public/index.html" ]; then
+    [ -f "$SCRIPT_DIR/package.json" ] && cp -f "$SCRIPT_DIR/package.json" "$INSTALL_DIR/"
     cp -f "$SCRIPT_DIR/public/index.html" "$INSTALL_DIR/public/"
-elif [ -f "$SCRIPT_DIR/index.html" ]; then
-    cp -f "$SCRIPT_DIR/index.html" "$INSTALL_DIR/public/"
+else
+    curl -fsSL "$REPO_RAW/server.js" -o "$INSTALL_DIR/server.js"
+    curl -fsSL "$REPO_RAW/package.json" -o "$INSTALL_DIR/package.json"
+    curl -fsSL "$REPO_RAW/public/index.html" -o "$INSTALL_DIR/public/index.html"
 fi
 
 # Fallback package.json if missing
