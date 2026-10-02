@@ -5,8 +5,10 @@ const path = require('path');
 const fs = require('fs-extra');
 const crypto = require('crypto');
 const multer = require('multer');
+const os = require('os');
 const { spawn, execFile } = require('child_process');
 const inst = require('./installers');
+const mkPlayers = require('./players');
 
 const PORT = process.env.PORT || 3000;
 const PASS_FILE = path.join(__dirname, '.password');
@@ -14,18 +16,22 @@ const UNINSTALL = '/usr/local/sbin/aetherpanel-uninstall';
 let PASSWORD = process.env.PANEL_PASSWORD || (fs.existsSync(PASS_FILE) ? fs.readFileSync(PASS_FILE, 'utf8').replace(/\r?\n$/, '') : '');
 const SERVERS = path.join(__dirname, 'data', 'servers');
 const CONFIG = path.join(__dirname, 'data', 'config.json');
+const ICONS = path.join(__dirname, 'data', 'icons');
+const NCPU = Math.max(1, os.cpus().length);
 
 if (!PASSWORD) {
     console.error('No panel password set. Run setup.sh, or start with: PANEL_PASSWORD=yourpass node server.js');
     process.exit(1);
 }
 fs.ensureDirSync(SERVERS);
+fs.ensureDirSync(ICONS);
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/ws' });
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/icons', express.static(ICONS));
 
 // ---------- helpers ----------
 const load = () => (fs.existsSync(CONFIG) ? fs.readJsonSync(CONFIG) : []);
@@ -54,6 +60,10 @@ function log(id, text) {
     send(id, { type: 'log', data: text });
 }
 const statusOf = (id) => (installing.has(id) ? 'INSTALLING' : procs.has(id) ? 'ONLINE' : 'OFFLINE');
+const players = mkPlayers({
+    safe,
+    write: (id, cmd) => { const c = procs.get(id); if (c) try { c.stdin.write(cmd + '\n'); } catch (e) {} }
+});
 
 // ---------- auth ----------
 const tokens = new Map();
@@ -88,13 +98,14 @@ function start(s) {
     const child = spawn('exec ' + s.startCmd, { cwd: safe(s.id), shell: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...(s.env || {}) } });
     child.started = Date.now();
     procs.set(s.id, child);
-    const out = (d) => log(s.id, d.toString());
+    const out = (d) => { const t = d.toString(); log(s.id, t); players.onOutput(s, t); };
     child.stdout.on('data', out);
     child.stderr.on('data', out);
     child.stdin.on('error', () => {});
     child.on('error', (e) => log(s.id, `[System] Failed to start: ${e.message}\n`));
     child.on('close', (code, sig) => {
         procs.delete(s.id);
+        players.onClose(s.id);
         log(s.id, `\n[System] Process exited (code ${code}${sig ? ', signal ' + sig : ''})\n`);
         send(s.id, { type: 'status' });
     });
@@ -109,7 +120,7 @@ function stop(s, force) {
         if (!c) return resolve();
         c.once('close', resolve);
         if (force) return c.kill('SIGKILL');
-        const g = { minecraft: 'stop', terraria: 'exit' }[s.game];
+        const g = s.stopCmd || { minecraft: 'stop', terraria: 'exit', tmodloader: 'exit' }[s.game];
         if (g) { try { c.stdin.write(g + '\n'); } catch (e) {} } else c.kill('SIGTERM');
         setTimeout(() => procs.has(s.id) && c.kill('SIGTERM'), 15000);
         setTimeout(() => procs.has(s.id) && c.kill('SIGKILL'), 30000);
@@ -122,7 +133,14 @@ async function installServer(s) {
     const l = (t) => log(s.id, t);
     try {
         l(`[System] Installing ${s.game} ${s.engine || ''} ${s.version}...\n`);
-        await inst.install(s, safe(s.id), l);
+        const result = await inst.install(s, safe(s.id), l);
+        if (result && result.startCmd) {
+            s.startCmd = result.startCmd;
+            const all = load();
+            const idx = all.findIndex((x) => x.id === s.id);
+            if (idx >= 0) { all[idx].startCmd = s.startCmd; save(all); }
+            l(`[System] Detected start command: ${s.startCmd}\n`);
+        }
         l('[System] Installation finished. You can start the server now.\n');
     } catch (e) {
         l(`[System] Install failed: ${e.message}\n[System] You can upload files manually in the Files tab, or delete and recreate the server.\n`);
@@ -144,32 +162,37 @@ app.post('/api/servers', async (req, res) => {
         const b = req.body || {};
         const bad = (m) => res.status(400).json({ error: m });
         const name = String(b.name || '').replace(/[\r\n]/g, ' ').trim().slice(0, 40);
-        const game = ['minecraft', 'terraria', 'valheim', 'custom'].includes(b.game) ? b.game : null;
+        const game = ['minecraft', 'terraria', 'tmodloader', 'valheim', 'custom'].includes(b.game) ? b.game : null;
         const port = parseInt(b.port);
         if (!name || !game || !(port > 0 && port < 65536)) return bad('Invalid name, game or port');
         const s = { id: 'srv-' + Date.now(), name, game, engine: '', version: '', port, ram: parseFloat(b.ram) || 0, startCmd: '', env: {} };
         if (game === 'custom') {
             s.startCmd = String(b.startCmd || '').trim().slice(0, 500);
+            s.stopCmd = '';
             if (!s.startCmd) return bad('A start command is required');
         } else {
             if (!/^[\w .-]+$/.test(name)) return bad('Name may only contain letters, numbers, spaces, dots, dashes and underscores');
             s.engine = game === 'minecraft' ? String(b.engine || '') : '';
+            if (game === 'minecraft' && !inst.ENGINES.includes(s.engine)) return bad('Unknown Minecraft software');
             s.version = String(b.version || '');
             let list;
             try { list = await inst.versions(game, s.engine); } catch (e) { return bad('Could not verify version: ' + e.message); }
             if (!list.some((v) => v.value === s.version)) return bad('Unknown version');
             if (game === 'minecraft') {
                 if (!(s.ram >= 0.5 && s.ram <= 128)) return bad('RAM must be between 0.5 and 128 GB');
-                s.java = await inst.javaFor(s.version);
+                s.java = s.engine === 'customjar' ? ([8, 17, 21].includes(parseInt(b.java)) ? parseInt(b.java) : 21) : await inst.javaFor(s.version);
             }
             const pw = String(b.password || '');
             if (game === 'valheim' && !/^[A-Za-z0-9]{5,30}$/.test(pw)) return bad('Valheim password must be 5-30 letters/numbers');
-            Object.assign(s, inst.build(s, pw));
+            const worldSize = ['small', 'medium', 'large'].includes(b.worldSize) ? b.worldSize : 'medium';
+            const worldType = ['random', 'corrupt', 'crimson'].includes(b.worldType) ? b.worldType : 'random';
+            Object.assign(s, inst.build(s, { password: pw, worldSize, worldType }));
         }
         await fs.ensureDir(safe(s.id));
         if (game === 'minecraft') {
             await fs.writeFile(path.join(safe(s.id), 'server.properties'), `server-port=${port}\nmotd=${name}\nmax-players=20\n`);
             await fs.writeFile(path.join(safe(s.id), 'eula.txt'), 'eula=true\n');
+            await players.prep(s, safe(s.id));
         }
         save([...load(), s]);
         if (game !== 'custom') installServer(s);
@@ -212,8 +235,62 @@ app.get('/api/servers/:id/stats', (req, res) => {
     if (!c) return res.json({ online: false });
     execFile('ps', ['-o', '%cpu=,rss=', '-p', String(c.pid)], (e, out) => {
         const [cpu, rss] = (out || '').trim().split(/\s+/);
-        res.json({ online: true, cpu: parseFloat(cpu) || 0, ramMB: Math.round((parseInt(rss) || 0) / 1024), uptime: Math.floor((Date.now() - c.started) / 1000) });
+        const pct = Math.min(100, (parseFloat(cpu) || 0) / NCPU); // normalize a multi-threaded %cpu to a 0-100 system share
+        res.json({ online: true, cpu: Math.round(pct * 10) / 10, ramMB: Math.round((parseInt(rss) || 0) / 1024), uptime: Math.floor((Date.now() - c.started) / 1000), startedAt: c.started });
     });
+});
+
+// ---------- players ----------
+app.get('/api/servers/:id/players', async (req, res) => {
+    try { res.json(await players.get(find(req.params.id), procs.has(req.params.id))); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/servers/:id/players/action', async (req, res) => {
+    try { res.json({ ok: true, message: await players.act(find(req.params.id), procs.has(req.params.id), req.body || {}) }); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// ---------- rename / edit commands ----------
+app.patch('/api/servers/:id', async (req, res) => {
+    const b = req.body || {};
+    const all = load();
+    const idx = all.findIndex((x) => x.id === req.params.id);
+    const s = all[idx];
+    if ('name' in b) {
+        const name = String(b.name || '').replace(/[\r\n]/g, ' ').trim().slice(0, 40);
+        if (!name) return res.status(400).json({ error: 'Name cannot be empty' });
+        s.name = name;
+    }
+    if ('startCmd' in b) {
+        const v = String(b.startCmd || '').trim().slice(0, 500);
+        if (!v) return res.status(400).json({ error: 'Start command cannot be empty' });
+        s.startCmd = v;
+    }
+    if ('stopCmd' in b) s.stopCmd = String(b.stopCmd || '').trim().slice(0, 200);
+    all[idx] = s;
+    save(all);
+    res.json({ ...s, status: statusOf(s.id) });
+});
+
+// ---------- server icon ----------
+const iconUpload = multer({
+    limits: { fileSize: 2 * 1024 * 1024 },
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => cb(null, ICONS),
+        filename: (req, file, cb) => cb(null, req.params.id + (path.extname(file.originalname).toLowerCase() || '.png'))
+    }),
+    fileFilter: (req, file, cb) => cb(null, /^image\/(png|jpe?g|gif|webp)$/.test(file.mimetype))
+});
+app.post('/api/servers/:id/icon', iconUpload.single('icon'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Please upload a PNG, JPG, GIF or WEBP image under 2 MB' });
+    const all = load();
+    const idx = all.findIndex((x) => x.id === req.params.id);
+    for (const ext of ['.png', '.jpg', '.jpeg', '.gif', '.webp']) {
+        if (ext !== path.extname(req.file.filename)) fs.remove(path.join(ICONS, req.params.id + ext)).catch(() => {});
+    }
+    all[idx].icon = `/icons/${req.file.filename}?v=${Date.now()}`;
+    save(all);
+    res.json({ icon: all[idx].icon });
 });
 
 // ---------- files API ----------
