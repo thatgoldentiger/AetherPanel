@@ -49,7 +49,12 @@ if ! command -v node &> /dev/null || ! command -v npm &> /dev/null || [ "$(node 
   if command -v apt-get &> /dev/null; then apt-get install -y nodejs; else dnf install -y nodejs; fi
   hash -r
 fi
-if ! command -v npm &> /dev/null; then echo "npm is still missing after installing Node.js. Install it manually (sudo apt-get install -y npm) and re-run."; exit 1; fi
+if ! command -v npm &> /dev/null; then
+  echo "npm still missing - installing it directly..."
+  if command -v apt-get &> /dev/null; then apt-get install -y npm; else dnf install -y npm; fi
+  hash -r
+fi
+if ! command -v npm &> /dev/null; then echo "Could not install npm automatically. Please install it manually and re-run this script."; exit 1; fi
 NODE_BIN="$(command -v node)"
 
 echo "[3/7] Installing Java (system copy; the panel also fetches the exact version each server needs)..."
@@ -142,7 +147,7 @@ if command -v ufw &> /dev/null; then
   ufw allow 22/tcp comment 'SSH'
   ufw allow 3000/tcp comment 'AetherPanel Dashboard'
   ufw allow 25565/tcp comment 'Minecraft Java'
-  ufw allow 7777/udp comment 'Terraria'
+  ufw allow 7777/tcp comment 'Terraria / tModLoader'
   ufw allow 2456:2458/udp comment 'Valheim'
   echo "y" | ufw enable || true
 fi
@@ -161,4 +166,5 @@ echo " URL:    http://${IP_ADDR}:3000"
 echo " Log in with the password you just chose."
 echo " Playit claim link: sudo journalctl -u playit -n 20 --no-pager"
 echo " Uninstall: sudo aetherpanel-uninstall (or the button in Settings)"
+echo " Note: Terraria/tModLoader use TCP; Valheim uses UDP; Minecraft uses TCP."
 echo "===================================================="
