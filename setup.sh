@@ -43,10 +43,14 @@ elif command -v dnf &> /dev/null; then
 fi
 
 echo "[2/7] Installing Node.js 20..."
-if ! command -v node &> /dev/null || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 18 ]; then
+# Reinstall from NodeSource if node is missing, too old, or npm is missing (distro nodejs often has no npm)
+if ! command -v node &> /dev/null || ! command -v npm &> /dev/null || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 18 ]; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   if command -v apt-get &> /dev/null; then apt-get install -y nodejs; else dnf install -y nodejs; fi
+  hash -r
 fi
+if ! command -v npm &> /dev/null; then echo "npm is still missing after installing Node.js. Install it manually (sudo apt-get install -y npm) and re-run."; exit 1; fi
+NODE_BIN="$(command -v node)"
 
 echo "[3/7] Installing Java (system copy; the panel also fetches the exact version each server needs)..."
 if command -v apt-get &> /dev/null; then
@@ -98,7 +102,7 @@ echo "[6/7] Pre-downloading Java 21, 17 and 8 (this can take a minute)..."
 runuser -u aether -- node "$INSTALL_DIR/installers.js" prefetch || true
 
 echo "[7/7] Registering services and firewall rules..."
-cat > /etc/systemd/system/aetherpanel.service <<'UNIT'
+cat > /etc/systemd/system/aetherpanel.service <<UNIT
 [Unit]
 Description=AetherPanel Game Management Daemon
 After=network.target
@@ -108,7 +112,7 @@ Type=simple
 User=aether
 WorkingDirectory=/opt/aetherpanel
 Environment=NODE_ENV=production PORT=3000
-ExecStart=/usr/bin/node /opt/aetherpanel/server.js
+ExecStart=$NODE_BIN /opt/aetherpanel/server.js
 Restart=always
 RestartSec=5
 TimeoutStopSec=60
