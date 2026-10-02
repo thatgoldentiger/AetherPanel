@@ -1,518 +1,199 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<html lang="en" data-theme="blue">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AetherPanel - Game Control Center</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js for Telemetry Graphs -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        dark: {
-                            bg: '#0B0F19',
-                            card: '#111827',
-                            border: '#1F2937',
-                            hover: '#1E293B',
-                            input: '#0F172A'
-                        }
-                    }
-                }
-            }
-        };
-    </script>
-
-    <style>
-        :root {
-            --brand-primary: #3b82f6;
-            --brand-hover: #2563eb;
-            --brand-glow: rgba(59, 130, 246, 0.25);
-            --brand-light: #93c5fd;
-        }
-
-        .theme-emerald {
-            --brand-primary: #10b981;
-            --brand-hover: #059669;
-            --brand-glow: rgba(16, 185, 129, 0.25);
-            --brand-light: #6ee7b7;
-        }
-
-        .theme-violet {
-            --brand-primary: #8b5cf6;
-            --brand-hover: #7c3aed;
-            --brand-glow: rgba(139, 92, 246, 0.25);
-            --brand-light: #c4b5fd;
-        }
-
-        .theme-amber {
-            --brand-primary: #f59e0b;
-            --brand-hover: #d97706;
-            --brand-glow: rgba(245, 158, 11, 0.25);
-            --brand-light: #fcd34d;
-        }
-
-        .bg-brand-600 { background-color: var(--brand-primary) !important; }
-        .hover\:bg-brand-500:hover { background-color: var(--brand-hover) !important; }
-        .text-brand-400 { color: var(--brand-light) !important; }
-        .text-brand-500 { color: var(--brand-primary) !important; }
-        .border-brand-500 { border-color: var(--brand-primary) !important; }
-        .focus\:ring-brand-500:focus { --tw-ring-color: var(--brand-primary) !important; }
-        
-        /* Custom Scrollbars */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0b0f19; }
-        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #374151; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AetherPanel</title>
+<style>
+:root{--bg:#0b0f19;--card:#111827;--bd:#1f2937;--tx:#e2e8f0;--mut:#94a3b8;--ac:#3b82f6}
+[data-theme=emerald]{--ac:#10b981}[data-theme=violet]{--ac:#8b5cf6}[data-theme=amber]{--ac:#f59e0b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px system-ui,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--bd)}
+h1{font-size:17px;margin:0;color:var(--ac)}main{max-width:1000px;margin:0 auto;padding:16px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+button,select,input,textarea{font:inherit;color:var(--tx);background:#0f172a;border:1px solid var(--bd);border-radius:7px;padding:7px 11px}
+button{cursor:pointer;background:#1e293b}button:hover{border-color:var(--ac)}button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+button.g{background:#059669}button.r{background:#e11d48}button.y{background:#d97706}button:disabled{opacity:.4;cursor:not-allowed}
+.tabs button{border-radius:7px 7px 0 0}.tabs button.on{background:var(--ac);color:#fff}
+#con{background:#020617;height:340px;overflow:auto;padding:10px;margin:0;font:12px monospace;white-space:pre-wrap;word-break:break-all;border-radius:7px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.stats div{background:#0f172a;border-radius:8px;padding:10px}.stats b{display:block;font-size:18px;margin-top:3px}
+.mut{color:var(--mut);font-size:12px}table{width:100%;border-collapse:collapse}td,th{padding:7px;text-align:left;border-bottom:1px solid var(--bd)}
+.badge{padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;background:#334155}.ONLINE{background:#064e3b;color:#6ee7b7}.INSTALLING{background:#78350f;color:#fcd34d}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:14px;z-index:9}.ov.show{display:flex}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:20px;width:100%;max-width:460px}.box label{display:block;margin:10px 0 3px;color:var(--mut);font-size:12px}
+.box input,.box select,.box textarea{width:100%}.hide{display:none!important}a.l{color:var(--ac);cursor:pointer}
+</style>
 </head>
-<body class="h-full font-sans antialiased bg-dark-bg text-slate-200 flex flex-col overflow-hidden theme-blue" id="appBody">
+<body>
+<header>
+  <h1>AetherPanel</h1>
+  <div class="row">
+    <select id="sel" onchange="selectServer(this.value)"></select>
+    <button class="p" onclick="openWizard()">+ New Server</button>
+    <button onclick="logout()">Log out</button>
+  </div>
+</header>
 
-    <!-- Top Navigation -->
-    <header class="h-16 bg-dark-card border-b border-dark-border px-4 flex items-center justify-between shrink-0 z-20">
-        <div class="flex items-center space-x-3">
-            <button onclick="toggleMobileSidebar()" class="md:hidden p-2 text-slate-400 hover:text-white rounded-lg hover:bg-dark-hover focus:outline-none">
-                <i data-lucide="menu" class="w-6 h-6"></i>
-            </button>
-            
-            <div class="flex items-center space-x-3">
-                <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-brand-glow">
-                    <i data-lucide="server" class="w-5 h-5"></i>
-                </div>
-                <div>
-                    <h1 id="panelBrandingTitle" class="font-bold text-slate-100 text-base leading-tight tracking-wide">AetherPanel</h1>
-                    <p class="text-[11px] text-slate-400 font-medium">Game Server Control Center</p>
-                </div>
-            </div>
-        </div>
+<main id="app" class="hide">
+  <div id="empty" class="card hide">No servers yet. Click <b>+ New Server</b> to create one.</div>
+  <div id="srv" class="hide">
+    <div class="card row" style="justify-content:space-between">
+      <div><b id="sname"></b> <span id="sbadge" class="badge"></span><div class="mut" id="smeta"></div></div>
+      <div class="row">
+        <button class="g" onclick="power('start')">Start</button>
+        <button class="y" onclick="power('restart')">Restart</button>
+        <button class="r" onclick="power('stop')">Stop</button>
+        <button onclick="power('kill')">Kill</button>
+      </div>
+    </div>
+    <div class="tabs row"><button id="t-console" class="on" onclick="tab('console')">Console</button><button id="t-files" onclick="tab('files')">Files</button><button id="t-settings" onclick="tab('settings')">Settings</button></div>
 
-        <div class="flex items-center space-x-3">
-            <div class="hidden sm:flex items-center space-x-2.5 bg-slate-900 border border-dark-border px-3 py-1.5 rounded-xl text-xs shadow-inner focus-within:border-brand-500 transition-all">
-                <span class="text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
-                    <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
-                    Active Server:
-                </span>
-                <select id="serverSelectHeader" onchange="switchActiveServer(this.value)" class="bg-slate-900 text-brand-400 font-semibold focus:outline-none cursor-pointer border-0 py-0.5 pr-2 rounded hover:text-white transition-colors">
-                </select>
-            </div>
-
-            <button onclick="openNewServerWizard()" class="flex items-center space-x-2 px-3.5 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md shadow-brand-glow">
-                <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                <span class="hidden sm:inline">Create Server</span>
-            </button>
-        </div>
-    </header>
-
-    <!-- Main Workspace -->
-    <div class="flex-1 flex overflow-hidden relative">
-
-        <div id="mobileBackdrop" onclick="toggleMobileSidebar(false)" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 hidden md:hidden transition-opacity"></div>
-
-        <!-- Sidebar Navigation -->
-        <aside id="sidebarNav" class="fixed md:static inset-y-0 left-0 z-40 w-64 bg-dark-card border-r border-dark-border flex flex-col shrink-0 transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
-            <div class="p-3 md:hidden flex items-center justify-between border-b border-dark-border">
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Navigation Menu</span>
-                <button onclick="toggleMobileSidebar(false)" class="p-1 text-slate-400 hover:text-white">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <div class="p-3 border-b border-dark-border bg-dark-bg/40">
-                <div class="flex items-center justify-between mb-1.5">
-                    <span id="sidebarServerName" class="font-semibold text-sm text-slate-100 truncate">Minecraft Survival</span>
-                    <span id="sidebarStatusBadge" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-950 text-emerald-400 border border-emerald-800/50">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse"></span>
-                        ONLINE
-                    </span>
-                </div>
-                <div id="sidebarServerMeta" class="text-xs text-slate-400 font-mono">Paper 1.20.4 • Port 25565</div>
-            </div>
-
-            <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
-                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-brand-600 text-white">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-                    <span>Dashboard & Console</span>
-                </button>
-                <button onclick="switchTab('analytics')" id="nav-analytics" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-slate-400 hover:text-slate-200 hover:bg-dark-hover">
-                    <i data-lucide="activity" class="w-4 h-4"></i>
-                    <span>Cluster Performance</span>
-                </button>
-                <button onclick="switchTab('files')" id="nav-files" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-slate-400 hover:text-slate-200 hover:bg-dark-hover">
-                    <i data-lucide="folder-tree" class="w-4 h-4"></i>
-                    <span class="flex-1 text-left">File Manager</span>
-                    <span id="fileCountBadge" class="text-[11px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 font-mono">5</span>
-                </button>
-                <button onclick="switchTab('backups')" id="nav-backups" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-slate-400 hover:text-slate-200 hover:bg-dark-hover">
-                    <i data-lucide="archive" class="w-4 h-4"></i>
-                    <span>Backups</span>
-                </button>
-                <button onclick="switchTab('panel-settings')" id="nav-panel-settings" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-slate-400 hover:text-slate-200 hover:bg-dark-hover">
-                    <i data-lucide="settings" class="w-4 h-4 text-brand-500"></i>
-                    <span>Panel & Theme Settings</span>
-                </button>
-            </nav>
-
-            <div class="p-3 m-3 bg-dark-bg/60 rounded-xl border border-dark-border text-xs">
-                <div class="font-semibold text-slate-300 flex items-center justify-between mb-1">
-                    <span class="flex items-center gap-1.5"><i data-lucide="globe" class="w-3.5 h-3.5 text-brand-500"></i> Playit.gg Status</span>
-                    <span class="text-[10px] text-emerald-400 bg-emerald-950 px-1 rounded">Active</span>
-                </div>
-                <div class="space-y-0.5 text-slate-400 font-mono text-[11px]">
-                    <div>Tunnel: <span class="text-slate-200">playit.service</span></div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Main View Frame -->
-        <main class="flex-1 bg-dark-bg overflow-y-auto p-3 sm:p-6 flex flex-col w-full">
-
-            <!-- TAB: DASHBOARD -->
-            <div id="tab-dashboard-view" class="space-y-6 flex-1 flex flex-col">
-                <div class="bg-dark-card border border-dark-border p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-md">
-                    <div class="flex items-center space-x-3">
-                        <div class="p-2.5 bg-brand-600/10 text-brand-500 rounded-lg">
-                            <i data-lucide="power" class="w-5 h-5"></i>
-                        </div>
-                        <div>
-                            <h2 class="text-sm font-bold text-slate-100">Server Power Controls</h2>
-                            <p class="text-xs text-slate-400">Manage runtime daemon lifecycle</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button onclick="triggerPowerAction('start')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors">
-                            <i data-lucide="play" class="w-3.5 h-3.5"></i>
-                            <span>Start</span>
-                        </button>
-                        <button onclick="triggerPowerAction('restart')" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors">
-                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
-                            <span>Restart</span>
-                        </button>
-                        <button onclick="triggerPowerAction('stop')" class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors">
-                            <i data-lucide="square" class="w-3.5 h-3.5"></i>
-                            <span>Stop</span>
-                        </button>
-                        <button onclick="triggerPowerAction('kill')" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors">
-                            <i data-lucide="zap" class="w-3.5 h-3.5"></i>
-                            <span>Kill Process</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                    <div class="bg-dark-card border border-dark-border p-4 rounded-xl flex items-center space-x-4">
-                        <div class="p-3 bg-brand-500/10 text-brand-400 rounded-lg">
-                            <i data-lucide="cpu" class="w-6 h-6"></i>
-                        </div>
-                        <div>
-                            <div class="text-xs text-slate-400 font-medium uppercase tracking-wider">CPU Usage</div>
-                            <div class="text-xl font-bold text-slate-100 mt-0.5" id="cpuStatDisplay">24.8%</div>
-                        </div>
-                    </div>
-                    <div class="bg-dark-card border border-dark-border p-4 rounded-xl flex items-center space-x-4">
-                        <div class="p-3 bg-purple-500/10 text-purple-400 rounded-lg">
-                            <i data-lucide="ram" class="w-6 h-6"></i>
-                        </div>
-                        <div>
-                            <div class="text-xs text-slate-400 font-medium uppercase tracking-wider">RAM Usage</div>
-                            <div class="text-xl font-bold text-slate-100 mt-0.5 font-mono" id="ramStatDisplay">2.8 GB / 4.0 GB</div>
-                        </div>
-                    </div>
-                    <div class="bg-dark-card border border-dark-border p-4 rounded-xl flex items-center space-x-4">
-                        <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg">
-                            <i data-lucide="users" class="w-6 h-6"></i>
-                        </div>
-                        <div>
-                            <div class="text-xs text-slate-400 font-medium uppercase tracking-wider">Active Players</div>
-                            <div class="text-xl font-bold text-slate-100 mt-0.5 font-mono" id="playersStatDisplay">4 / 20 Online</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-dark-card border border-dark-border p-4 rounded-xl space-y-3">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <i data-lucide="activity" class="w-4 h-4 text-brand-500"></i>
-                            <h3 class="text-sm font-semibold text-slate-200">Real-Time Metrics</h3>
-                        </div>
-                    </div>
-                    <div class="h-40 w-full bg-slate-950 rounded-lg border border-dark-border p-2">
-                        <canvas id="singleServerChart" class="w-full h-full block"></canvas>
-                    </div>
-                </div>
-
-                <!-- Live Terminal Console -->
-                <div class="bg-dark-card border border-dark-border rounded-xl flex-1 flex flex-col min-h-[360px] shadow-lg overflow-hidden">
-                    <div class="px-4 py-3 bg-slate-900 border-b border-dark-border flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <i data-lucide="terminal" class="w-4 h-4 text-brand-500"></i>
-                            <span class="text-sm font-semibold text-slate-200">Server Terminal Console</span>
-                        </div>
-                        <div class="flex items-center space-x-2">
-                            <button onclick="clearConsole()" class="text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-slate-300 transition-colors">Clear</button>
-                        </div>
-                    </div>
-                    <div id="consoleLog" class="flex-1 bg-slate-950 p-4 font-mono text-xs overflow-y-auto space-y-1 text-slate-300">
-                        <div class="text-slate-500">[System] Initializing console daemon...</div>
-                    </div>
-                    <form onsubmit="sendConsoleCommand(event)" class="p-2 bg-slate-900 border-t border-dark-border flex items-center space-x-2">
-                        <span class="text-brand-500 font-mono text-sm pl-2 font-bold">&gt;</span>
-                        <input type="text" id="consoleInput" placeholder="Type command (e.g. list, op, say Hello)..." class="flex-1 bg-transparent border-0 text-sm font-mono text-slate-100 focus:outline-none px-2">
-                        <button type="submit" class="px-4 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-semibold transition-colors">Send</button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- TAB: CLUSTER PERFORMANCE -->
-            <div id="tab-analytics-view" class="hidden space-y-6">
-                <div class="bg-dark-card border border-dark-border p-5 rounded-xl space-y-4">
-                    <h2 class="text-base font-bold text-slate-100">Cluster Allocated Resources</h2>
-                    <div class="h-64 w-full bg-slate-950 rounded-lg border border-dark-border p-3">
-                        <canvas id="clusterChart" class="w-full h-full block"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB: FILE MANAGER -->
-            <div id="tab-files-view" class="hidden space-y-4 flex-1 flex flex-col">
-                <div class="bg-dark-card border border-dark-border p-3 rounded-xl flex items-center justify-between">
-                    <div class="font-mono text-xs text-brand-400 font-bold">/ root</div>
-                    <div class="flex items-center space-x-2">
-                        <button onclick="promptCreateFile()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg flex items-center space-x-1.5 transition-colors">
-                            <i data-lucide="file-plus" class="w-3.5 h-3.5"></i>
-                            <span>New File</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div id="fileBrowserContainer" class="bg-dark-card border border-dark-border rounded-xl flex-1 overflow-hidden flex flex-col">
-                    <table class="w-full text-left text-xs text-slate-300">
-                        <thead class="bg-slate-900 text-slate-400 font-mono text-[11px] uppercase border-b border-dark-border">
-                            <tr>
-                                <th class="p-3">Name</th>
-                                <th class="p-3">Size</th>
-                                <th class="p-3 text-right">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="fileListTable" class="divide-y divide-dark-border">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- TAB: PANEL SETTINGS -->
-            <div id="tab-panel-settings-view" class="hidden space-y-6">
-                <div class="bg-dark-card border border-dark-border p-5 rounded-xl space-y-4">
-                    <h2 class="text-base font-bold text-slate-100">Appearance & Theme Style</h2>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-xl">
-                        <button onclick="setPanelTheme('theme-blue')" class="p-3 bg-slate-900 border border-dark-border hover:border-blue-500 rounded-xl flex items-center space-x-3 text-xs text-slate-200 font-semibold">
-                            <span class="w-4 h-4 rounded-full bg-blue-500"></span>
-                            <span>Ocean Blue</span>
-                        </button>
-                        <button onclick="setPanelTheme('theme-emerald')" class="p-3 bg-slate-900 border border-dark-border hover:border-emerald-500 rounded-xl flex items-center space-x-3 text-xs text-slate-200 font-semibold">
-                            <span class="w-4 h-4 rounded-full bg-emerald-500"></span>
-                            <span>Emerald</span>
-                        </button>
-                        <button onclick="setPanelTheme('theme-violet')" class="p-3 bg-slate-900 border border-dark-border hover:border-violet-500 rounded-xl flex items-center space-x-3 text-xs text-slate-200 font-semibold">
-                            <span class="w-4 h-4 rounded-full bg-violet-500"></span>
-                            <span>Neon Violet</span>
-                        </button>
-                        <button onclick="setPanelTheme('theme-amber')" class="p-3 bg-slate-900 border border-dark-border hover:border-amber-500 rounded-xl flex items-center space-x-3 text-xs text-slate-200 font-semibold">
-                            <span class="w-4 h-4 rounded-full bg-amber-500"></span>
-                            <span>Flame Amber</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-        </main>
+    <div id="v-console" class="card">
+      <div class="stats"><div class="mut">CPU<b id="cpu">-</b></div><div class="mut">RAM<b id="ram">-</b></div><div class="mut">Uptime<b id="up">-</b></div></div>
+      <canvas id="graph" width="900" height="80" style="width:100%;height:80px;margin:12px 0"></canvas>
+      <pre id="con"></pre>
+      <form class="row" style="margin-top:8px;flex-wrap:nowrap" onsubmit="sendCmd(event)"><input id="cmd" style="flex:1" placeholder="Type a command and press Enter" autocomplete="off"><button class="p">Send</button></form>
     </div>
 
-    <!-- CREATE SERVER WIZARD MODAL -->
-    <div id="newServerModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-dark-card border border-dark-border rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
-            <div class="px-6 py-4 bg-slate-900 border-b border-dark-border flex items-center justify-between">
-                <h3 class="text-base font-bold text-slate-100">Create New Instance</h3>
-                <button onclick="closeNewServerWizard()" class="p-1 text-slate-400 hover:text-white">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <div class="p-6 space-y-4 text-xs">
-                <div>
-                    <label class="block text-slate-400 mb-1 font-semibold">Game Title</label>
-                    <select id="wizardGameSelect" class="w-full bg-slate-950 border border-dark-border p-2.5 rounded-lg text-slate-100">
-                        <option value="minecraft">Minecraft (Java Edition)</option>
-                        <option value="terraria">Terraria</option>
-                        <option value="valheim">Valheim</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-slate-400 mb-1 font-semibold">Server Name</label>
-                    <input type="text" id="wizardServerName" value="New Game Server" class="w-full bg-slate-950 border border-dark-border p-2.5 rounded-lg text-slate-100">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-slate-400 mb-1 font-semibold">Port Mapping</label>
-                        <input type="number" id="wizardServerPort" value="25565" class="w-full bg-slate-950 border border-dark-border p-2.5 rounded-lg text-slate-100 font-mono">
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 mb-1 font-semibold">RAM (GB)</label>
-                        <input type="number" id="wizardServerRam" step="0.5" value="4.0" class="w-full bg-slate-950 border border-dark-border p-2.5 rounded-lg text-slate-100 font-mono">
-                    </div>
-                </div>
-            </div>
-            <div class="px-6 py-4 bg-slate-900 border-t border-dark-border flex items-center justify-between">
-                <button onclick="closeNewServerWizard()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold">Cancel</button>
-                <button onclick="executeServerCreation()" class="px-5 py-2 bg-brand-600 text-white rounded-lg text-xs font-semibold">Provision Server</button>
-            </div>
-        </div>
+    <div id="v-files" class="card hide">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <div><button onclick="goUp()">&uarr; Up</button> <span class="mut" id="cwd"></span></div>
+        <div class="row"><button onclick="newFile()">New file</button><button onclick="newFolder()">New folder</button><button class="p" onclick="$('up').click()">Upload</button><input type="file" id="up" multiple class="hide" onchange="uploadFiles(this)"></div>
+      </div>
+      <table><thead><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr></thead><tbody id="ftb"></tbody></table>
     </div>
 
-    <script>
-        const PANEL_CONFIG = {
-            panelName: "AetherPanel",
-            defaultTheme: "theme-blue"
-        };
+    <div id="v-settings" class="card hide">
+      <b>Theme</b>
+      <div class="row" style="margin:8px 0 18px"><button onclick="theme('blue')">Blue</button><button onclick="theme('emerald')">Emerald</button><button onclick="theme('violet')">Violet</button><button onclick="theme('amber')">Amber</button></div>
+      <b>Start command</b><div class="mut" id="scmd" style="margin:6px 0 18px;font-family:monospace"></div>
+      <button class="r" onclick="delServer()">Delete this server and all its files</button>
+    </div>
+  </div>
+</main>
 
-        const state = {
-            servers: [
-                { id: 'srv-1', name: 'Minecraft Survival', game: 'minecraft', engine: 'Paper', version: '1.20.4', port: 25565, ram: 4.0, status: 'ONLINE', cpu: 24.8, ramUsed: 2.8, players: 4, maxPlayers: 20 }
-            ],
-            activeServerId: 'srv-1',
-            files: [
-                { name: 'server.properties', size: '1.2 KB' },
-                { name: 'eula.txt', size: '180 B' }
-            ]
-        };
+<div id="login" class="ov show"><form class="box" onsubmit="doLogin(event)"><h2 style="margin-top:0">AetherPanel login</h2><label>Password</label><input type="password" id="pw" autofocus><div id="lerr" class="mut" style="color:#fb7185;margin-top:8px"></div><button class="p" style="margin-top:12px;width:100%">Log in</button></form></div>
 
-        let singleChart = null;
+<div id="wiz" class="ov"><div class="box">
+  <h3 style="margin-top:0">Create server</h3>
+  <label>Game</label><select id="wg" onchange="wizGame()"><option value="minecraft">Minecraft (Paper, auto-installed)</option><option value="terraria">Terraria</option><option value="valheim">Valheim</option><option value="custom">Custom command</option></select>
+  <label>Name</label><input id="wn" value="My Server">
+  <div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label>Port</label><input id="wp" type="number" value="25565"></div><div style="flex:1" id="wrw"><label>RAM (GB)</label><input id="wr" type="number" step="0.5" value="2"></div></div>
+  <div id="wvw"><label>Minecraft version</label><input id="wv" value="1.21.4"><div class="mut" style="margin-top:6px">By creating a Minecraft server you accept the <a class="l" href="https://aka.ms/MinecraftEULA" target="_blank">Minecraft EULA</a>.</div></div>
+  <div id="wcw" class="hide"><label>Start command (runs inside the server's folder; upload the game files in the Files tab)</label><textarea id="wc" rows="3"></textarea></div>
+  <div class="row" style="margin-top:16px;justify-content:space-between"><button onclick="$('wiz').classList.remove('show')">Cancel</button><button class="p" onclick="createServer()">Create</button></div>
+</div></div>
 
-        window.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
-            loadSavedConfig();
-            renderHeaderServerDropdown();
-            initCharts();
-            renderFileList();
-        });
+<div id="ed" class="ov"><div class="box" style="max-width:800px"><b id="edname"></b><textarea id="edtx" rows="22" style="margin-top:8px;font:12px monospace;white-space:pre"></textarea>
+  <div class="row" style="margin-top:10px;justify-content:space-between"><button onclick="$('ed').classList.remove('show')">Close</button><button class="p" onclick="saveFile()">Save</button></div></div></div>
 
-        function setPanelTheme(themeClass) {
-            document.getElementById('appBody').className = `h-full font-sans antialiased bg-dark-bg text-slate-200 flex flex-col overflow-hidden ${themeClass}`;
-            localStorage.setItem('panelTheme', themeClass);
-        }
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let token = localStorage.getItem('ap_token'), cur = localStorage.getItem('ap_cur'), servers = [], ws = null, cwd = '', editing = '', hist = [];
 
-        function loadSavedConfig() {
-            document.getElementById('panelBrandingTitle').innerText = PANEL_CONFIG.panelName;
-            const savedTheme = localStorage.getItem('panelTheme') || PANEL_CONFIG.defaultTheme;
-            setPanelTheme(savedTheme);
-        }
+async function api(url, opt = {}) {
+  opt.headers = Object.assign({ 'x-token': token || '' }, opt.headers || {});
+  if (opt.body && !(opt.body instanceof FormData)) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(opt.body); }
+  const r = await fetch(url, opt);
+  if (r.status === 401 && url !== '/api/login') { showLogin(); throw new Error('Please log in'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+  return j;
+}
+const run = (p) => p.catch((e) => alert(e.message));
 
-        function switchTab(tabId) {
-            ['dashboard', 'analytics', 'files', 'panel-settings'].forEach(t => {
-                const view = document.getElementById(`tab-${t}-view`);
-                if (view) view.classList.add('hidden');
-            });
-            document.getElementById(`tab-${tabId}-view`)?.classList.remove('hidden');
-            toggleMobileSidebar(false);
-        }
+function showLogin() { token = null; localStorage.removeItem('ap_token'); if (ws) { ws.onclose = null; ws.close(); } $('app').classList.add('hide'); $('login').classList.add('show'); }
+async function doLogin(e) {
+  e.preventDefault(); $('lerr').textContent = '';
+  try { const j = await api('/api/login', { method: 'POST', body: { password: $('pw').value } }); token = j.token; localStorage.setItem('ap_token', token); $('pw').value = ''; $('login').classList.remove('show'); init(); }
+  catch (err) { $('lerr').textContent = err.message; }
+}
+function logout() { showLogin(); }
 
-        function toggleMobileSidebar(force) {
-            const sidebar = document.getElementById('sidebarNav');
-            const backdrop = document.getElementById('mobileBackdrop');
-            if (force === false || !sidebar.classList.contains('-translate-x-full')) {
-                sidebar.classList.add('-translate-x-full');
-                backdrop.classList.add('hidden');
-            } else {
-                sidebar.classList.remove('-translate-x-full');
-                backdrop.classList.remove('hidden');
-            }
-        }
+async function init() { $('app').classList.remove('hide'); await loadServers(); }
+async function loadServers() {
+  servers = await api('/api/servers');
+  if (!servers.find((s) => s.id === cur)) cur = servers[0] && servers[0].id;
+  $('sel').innerHTML = servers.map((s) => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+  $('empty').classList.toggle('hide', servers.length > 0); $('srv').classList.toggle('hide', !servers.length);
+  const s = servers.find((x) => x.id === cur); if (!s) return;
+  $('sname').textContent = s.name; $('sbadge').textContent = s.status; $('sbadge').className = 'badge ' + s.status;
+  $('smeta').textContent = `${s.game}${s.version ? ' ' + s.version : ''} - port ${s.port}`; $('scmd').textContent = s.startCmd;
+  if (!ws && token && cur) connectWs();
+}
+function selectServer(id) { cur = id; localStorage.setItem('ap_cur', id); cwd = ''; hist = []; connectWs(); loadServers(); if (!$('v-files').classList.contains('hide')) loadFiles(); }
 
-        function renderHeaderServerDropdown() {
-            const dropdown = document.getElementById('serverSelectHeader');
-            dropdown.innerHTML = state.servers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-        }
+function add(t) { const c = $('con'); const stick = c.scrollTop + c.clientHeight >= c.scrollHeight - 30; c.textContent += t.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ''); if (c.textContent.length > 200000) c.textContent = c.textContent.slice(-150000); if (stick) c.scrollTop = c.scrollHeight; }
+function connectWs() {
+  if (ws) { ws.onclose = null; ws.close(); }
+  $('con').textContent = ''; if (!cur || !token) return;
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?serverId=${cur}&token=${token}`);
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === 'history') { $('con').textContent = ''; add(m.data); } else if (m.type === 'log') add(m.data); else if (m.type === 'status') loadServers(); };
+  ws.onclose = (ev) => { if (ev.code === 4001) return showLogin(); setTimeout(() => token && cur && connectWs(), 3000); };
+}
+function sendCmd(e) { e.preventDefault(); const v = $('cmd').value.trim(); if (v && ws && ws.readyState === 1) { ws.send(JSON.stringify({ type: 'command', command: v })); add('> ' + v + '\n'); } $('cmd').value = ''; }
+function power(a) { if (a === 'kill' && !confirm('Force kill? Unsaved world data may be lost.')) return; run(api(`/api/servers/${cur}/power`, { method: 'POST', body: { action: a } }).then(loadServers)); }
 
-        function switchActiveServer(id) {
-            state.activeServerId = id;
-            appendConsoleLog(`Switched working server context to ${id}`);
-        }
+function tab(t) {
+  ['console', 'files', 'settings'].forEach((x) => { $('v-' + x).classList.toggle('hide', x !== t); $('t-' + x).classList.toggle('on', x === t); });
+  if (t === 'files') loadFiles();
+}
+function theme(t) { document.documentElement.dataset.theme = t; localStorage.setItem('ap_theme', t); }
+theme(localStorage.getItem('ap_theme') || 'blue');
 
-        function triggerPowerAction(action) {
-            appendConsoleLog(`[PowerAction] Executed ${action.toUpperCase()} command.`);
-        }
+// ----- stats -----
+const fmtUp = (s) => (s >= 3600 ? Math.floor(s / 3600) + 'h ' : '') + Math.floor((s % 3600) / 60) + 'm ' + (s % 60) + 's';
+async function pollStats() {
+  if (!token || !cur) return;
+  try {
+    const j = await api(`/api/servers/${cur}/stats`);
+    $('cpu').textContent = j.online ? j.cpu.toFixed(1) + '%' : '-'; $('ram').textContent = j.online ? j.ramMB + ' MB' : '-'; $('up').textContent = j.online ? fmtUp(j.uptime) : '-';
+    hist.push(j.online ? j.cpu : 0); if (hist.length > 60) hist.shift(); draw();
+    const s = servers.find((x) => x.id === cur); if (s && (s.status === 'ONLINE') !== j.online) loadServers();
+  } catch (e) {}
+}
+function draw() {
+  const c = $('graph'), x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height);
+  const max = Math.max(100, ...hist); x.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--ac'); x.lineWidth = 2; x.beginPath();
+  hist.forEach((v, i) => { const px = (i / 59) * c.width, py = c.height - (v / max) * (c.height - 6) - 3; i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke();
+}
+setInterval(pollStats, 3000);
 
-        function appendConsoleLog(text) {
-            const logBox = document.getElementById('consoleLog');
-            const line = document.createElement('div');
-            line.innerHTML = `<span class="text-slate-500">[${new Date().toLocaleTimeString()}]</span> ${text}`;
-            logBox.appendChild(line);
-            logBox.scrollTop = logBox.scrollHeight;
-        }
+// ----- files -----
+const join = (a, b) => (a ? a + '/' : '') + b;
+const fsz = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
+async function loadFiles() {
+  try {
+    const list = await api(`/api/servers/${cur}/files?path=${encodeURIComponent(cwd)}`);
+    $('cwd').textContent = '/' + cwd;
+    $('ftb').innerHTML = list.map((f) => `<tr data-n="${esc(f.name)}" data-d="${f.isDir ? 1 : 0}"><td>${f.isDir ? '&#128193; ' : ''}<a class="l" data-a="open">${esc(f.name)}</a></td><td>${f.isDir ? '--' : fsz(f.size)}</td><td class="mut">${f.modified}</td><td><a class="l" data-a="del">Delete</a></td></tr>`).join('') || '<tr><td colspan="4" class="mut">Empty folder</td></tr>';
+  } catch (e) { alert(e.message); }
+}
+$('ftb').addEventListener('click', (e) => {
+  const a = e.target.dataset.a, tr = e.target.closest('tr'); if (!a || !tr) return;
+  const name = tr.dataset.n, isDir = tr.dataset.d === '1';
+  if (a === 'open') { if (isDir) { cwd = join(cwd, name); loadFiles(); } else openFile(join(cwd, name)); }
+  if (a === 'del' && confirm(`Delete ${name}?`)) run(api(`/api/servers/${cur}/files?path=${encodeURIComponent(join(cwd, name))}`, { method: 'DELETE' }).then(loadFiles));
+});
+function goUp() { cwd = cwd.split('/').slice(0, -1).join('/'); loadFiles(); }
+async function openFile(p) { try { const j = await api(`/api/servers/${cur}/files/content?file=${encodeURIComponent(p)}`); editing = p; $('edname').textContent = '/' + p; $('edtx').value = j.content; $('ed').classList.add('show'); } catch (e) { alert(e.message); } }
+function saveFile() { run(api(`/api/servers/${cur}/files/save`, { method: 'POST', body: { filePath: editing, content: $('edtx').value } }).then(() => { $('ed').classList.remove('show'); loadFiles(); })); }
+function newFile() { const n = prompt('New file name:'); if (n) { editing = join(cwd, n.trim()); $('edname').textContent = '/' + editing; $('edtx').value = ''; $('ed').classList.add('show'); } }
+function newFolder() { const n = prompt('New folder name:'); if (n) run(api(`/api/servers/${cur}/files/mkdir`, { method: 'POST', body: { path: join(cwd, n.trim()) } }).then(loadFiles)); }
+function uploadFiles(inp) { const fd = new FormData(); [...inp.files].forEach((f) => fd.append('files', f)); run(api(`/api/servers/${cur}/upload?path=${encodeURIComponent(cwd)}`, { method: 'POST', body: fd }).then(loadFiles)); inp.value = ''; }
 
-        function clearConsole() {
-            document.getElementById('consoleLog').innerHTML = '';
-        }
+// ----- wizard / delete -----
+const DEF = { minecraft: [25565, ''], terraria: [7777, './TerrariaServer.bin.x86_64 -port 7777 -maxplayers 8'], valheim: [2456, './valheim_server.x86_64 -name "My Server" -port 2456 -world Dedicated -password changeme123'], custom: [25565, ''] };
+function wizGame() { const g = $('wg').value; $('wp').value = DEF[g][0]; $('wc').value = DEF[g][1]; const mc = g === 'minecraft'; $('wvw').classList.toggle('hide', !mc); $('wrw').classList.toggle('hide', !mc); $('wcw').classList.toggle('hide', mc); }
+function openWizard() { wizGame(); $('wiz').classList.add('show'); }
+function createServer() {
+  run(api('/api/servers', { method: 'POST', body: { game: $('wg').value, name: $('wn').value, port: $('wp').value, ram: $('wr').value, version: $('wv').value, startCmd: $('wc').value } })
+    .then((s) => { $('wiz').classList.remove('show'); return loadServers().then(() => selectServer(s.id)); }));
+}
+function delServer() { if (confirm('Delete this server and ALL its files? This cannot be undone.')) run(api(`/api/servers/${cur}`, { method: 'DELETE' }).then(() => { if (ws) { ws.onclose = null; ws.close(); ws = null; } cur = null; $('con').textContent = ''; tab('console'); return loadServers(); })); }
 
-        function sendConsoleCommand(e) {
-            e.preventDefault();
-            const input = document.getElementById('consoleInput');
-            if (input.value.trim()) {
-                appendConsoleLog(`<span class="text-brand-400">&gt; ${input.value}</span>`);
-                input.value = '';
-            }
-        }
-
-        function initCharts() {
-            const ctx = document.getElementById('singleServerChart')?.getContext('2d');
-            if (ctx) {
-                singleChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: ['0s', '5s', '10s', '15s', '20s'],
-                        datasets: [{ label: 'CPU %', data: [15, 25, 20, 30, 24], borderColor: '#3b82f6', tension: 0.4, borderWidth: 2, pointRadius: 0 }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-                });
-            }
-        }
-
-        function renderFileList() {
-            const tbody = document.getElementById('fileListTable');
-            tbody.innerHTML = state.files.map(f => `
-                <tr class="hover:bg-dark-hover/50">
-                    <td class="p-3 font-medium text-slate-200">${f.name}</td>
-                    <td class="p-3 font-mono text-slate-400">${f.size}</td>
-                    <td class="p-3 text-right"><button class="text-brand-400 hover:underline">Edit</button></td>
-                </tr>
-            `).join('');
-        }
-
-        function promptCreateFile() {
-            const name = prompt('File name:');
-            if (name) { state.files.push({ name, size: '0 B' }); renderFileList(); }
-        }
-
-        function openNewServerWizard() { document.getElementById('newServerModal').classList.remove('hidden'); }
-        function closeNewServerWizard() { document.getElementById('newServerModal').classList.add('hidden'); }
-
-        function executeServerCreation() {
-            const name = document.getElementById('wizardServerName').value;
-            const game = document.getElementById('wizardGameSelect').value;
-            const port = parseInt(document.getElementById('wizardServerPort').value);
-            const ram = parseFloat(document.getElementById('wizardServerRam').value);
-
-            state.servers.push({ id: `srv-${Date.now()}`, name, game, port, ram, status: 'OFFLINE' });
-            renderHeaderServerDropdown();
-            closeNewServerWizard();
-            appendConsoleLog(`Provisioned instance '${name}' on port ${port}.`);
-        }
-    </script>
+if (token) { $('login').classList.remove('show'); init().catch(() => {}); }
+</script>
 </body>
 </html>
