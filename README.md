@@ -1,6 +1,15 @@
 # AetherPanel
 
-Self-hosted game server panel: password login, start/stop/restart, live console, file manager and editor. Minecraft (Paper) is downloaded automatically; Terraria, Valheim and anything else run from a start command with files you upload.
+Self-hosted game server panel: password login, one-click server creation with automatic downloads, start/stop/restart, live console, file manager and editor.
+
+| Game | What gets downloaded automatically |
+|---|---|
+| Minecraft | Paper, Vanilla, Purpur or Fabric at the version you pick, plus the exact Java runtime that version needs |
+| Terraria | Official dedicated server from terraria.org at the version you pick |
+| Valheim | Dedicated server via SteamCMD |
+| Custom | Nothing; you upload files and give a start command |
+
+Version dropdowns are loaded live from the official sources, so new releases show up without updating the panel.
 
 ## Install (Ubuntu/Debian)
 
@@ -10,34 +19,33 @@ cd AetherPanel
 sudo bash setup.sh
 ```
 
-Or in one line: `curl -sSL https://raw.githubusercontent.com/thatgoldentiger/AetherPanel/main/setup.sh | sudo bash`
+The script asks you to choose the panel password, then installs Node.js, Java, SteamCMD, 32-bit libraries and Playit.gg.
+Non-interactive: `sudo AETHER_PASSWORD='yourpassword' bash setup.sh`
 
-The script prints the dashboard URL and a generated password at the end.
+## Uninstall
 
-## Layout
+- From a terminal: `sudo aetherpanel-uninstall` (or `sudo bash uninstall.sh` from the repo)
+- From the panel: Settings -> Uninstall AetherPanel (asks for your password)
+
+You can choose to keep your game servers and worlds. Java and other system packages are left installed.
+
+## Repo files
 
 ```
-Repo:                         Installed at /opt/aetherpanel:
-setup.sh                      server.js, package.json, .env (password)
-server.js                     public/index.html
-package.json                  data/config.json
-public/index.html             data/servers/srv-*/  (one folder per game server)
+setup.sh  uninstall.sh  server.js  installers.js  package.json  public/index.html
 ```
 
-## Settings
-
-| What | Where |
-|---|---|
-| Panel password | `/opt/aetherpanel/.env` (`PANEL_PASSWORD=`), then `sudo systemctl restart aetherpanel` |
-| Port | `PORT` in `/etc/systemd/system/aetherpanel.service` (default 3000) |
+Installed to `/opt/aetherpanel` (data in `data/servers/srv-*`, Java runtimes in `data/java`, password in `.password`).
 
 ## Commands
 
 ```bash
-sudo systemctl restart aetherpanel     # restart panel (also stops running game servers)
+sudo systemctl restart aetherpanel     # also stops running game servers
 sudo journalctl -u aetherpanel -f      # panel logs
 sudo journalctl -u playit -n 20        # Playit claim link
 ```
+
+Change the password in Settings, or set `PANEL_PASSWORD` in the service environment.
 
 ## Security
 
