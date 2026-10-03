@@ -114,16 +114,27 @@ function start(s) {
     return null;
 }
 
+async function runStopScript(id, c, script) {
+    const lines = String(script || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    for (const line of lines) {
+        if (procs.get(id) !== c) return; // process already gone (closed, or replaced by a new start)
+        const m = line.match(/^wait\((\d+(?:\.\d+)?)\)$/i);
+        if (m) await new Promise((r) => setTimeout(r, Math.min(120, parseFloat(m[1])) * 1000));
+        else try { c.stdin.write(line + '\n'); } catch (e) {}
+    }
+}
+
 function stop(s, force) {
     return new Promise((resolve) => {
         const c = procs.get(s.id);
         if (!c) return resolve();
         c.once('close', resolve);
         if (force) return c.kill('SIGKILL');
-        const g = s.stopCmd || { minecraft: 'stop', terraria: 'exit', tmodloader: 'exit' }[s.game];
-        if (g) { try { c.stdin.write(g + '\n'); } catch (e) {} } else c.kill('SIGTERM');
-        setTimeout(() => procs.has(s.id) && c.kill('SIGTERM'), 15000);
-        setTimeout(() => procs.has(s.id) && c.kill('SIGKILL'), 30000);
+        const script = s.stopCmd || { minecraft: 'stop', terraria: 'exit', tmodloader: 'exit' }[s.game] || '';
+        if (script) runStopScript(s.id, c, script).catch(() => {});
+        else c.kill('SIGTERM');
+        setTimeout(() => procs.has(s.id) && c.kill('SIGTERM'), 25000);
+        setTimeout(() => procs.has(s.id) && c.kill('SIGKILL'), 45000);
     });
 }
 
@@ -182,11 +193,13 @@ app.post('/api/servers', async (req, res) => {
                 if (!(s.ram >= 0.5 && s.ram <= 128)) return bad('RAM must be between 0.5 and 128 GB');
                 s.java = s.engine === 'customjar' ? ([8, 17, 21].includes(parseInt(b.java)) ? parseInt(b.java) : 21) : await inst.javaFor(s.version);
             }
-            const pw = String(b.password || '');
-            if (game === 'valheim' && !/^[A-Za-z0-9]{5,30}$/.test(pw)) return bad('Valheim password must be 5-30 letters/numbers');
+            const pw = String(b.password || '').trim();
+            if (game === 'valheim' && pw) {
+                if (!/^[A-Za-z0-9]{5,30}$/.test(pw)) return bad('If you set a Valheim password it must be 5-30 letters/numbers');
+                if (pw.toLowerCase() === 'dedicated') return bad('Valheim password cannot be the same as the world name ("Dedicated")');
+            }
             const worldSize = ['small', 'medium', 'large'].includes(b.worldSize) ? b.worldSize : 'medium';
-            const worldType = ['random', 'corrupt', 'crimson'].includes(b.worldType) ? b.worldType : 'random';
-            Object.assign(s, inst.build(s, { password: pw, worldSize, worldType }));
+            Object.assign(s, inst.build(s, { password: pw, worldSize }));
         }
         await fs.ensureDir(safe(s.id));
         if (game === 'minecraft') {
