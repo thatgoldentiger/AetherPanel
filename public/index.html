@@ -27,7 +27,10 @@ button.sm{padding:3px 8px;font-size:12px}
 #selrow{display:flex;gap:8px;overflow-x:auto;max-width:60vw;padding:2px}
 .sbtn{display:flex;align-items:center;gap:6px;white-space:nowrap;background:#0f172a;border:1px solid var(--bd);border-radius:20px;padding:5px 12px 5px 5px;cursor:pointer}
 .sbtn.on{border-color:var(--ac);background:#132036}.sbtn img,.sbtn .em{width:22px;height:22px;border-radius:50%;object-fit:cover;display:flex;align-items:center;justify-content:center;background:#1e293b;font-size:14px}
-.icon-lg{width:56px;height:56px;border-radius:12px;object-fit:cover;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:28px}
+.icon-lg{width:56px;height:56px;border-radius:12px;overflow:hidden;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0}
+.icon-lg img{width:100%;height:100%;object-fit:cover;display:block}
+.field{margin:14px 0}.field>label{display:block;font-weight:600;margin-bottom:3px}.field>.mut{display:block;margin-bottom:6px}
+.codebox{width:100%;display:block;font-family:monospace;font-size:13px;resize:vertical;box-sizing:border-box}
 </style>
 </head>
 <body>
@@ -87,8 +90,16 @@ button.sm{padding:3px 8px;font-size:12px}
       <b>Theme</b>
       <div class="row" style="margin:8px 0 18px"><button onclick="theme('blue')">Blue</button><button onclick="theme('emerald')">Emerald</button><button onclick="theme('violet')">Violet</button><button onclick="theme('amber')">Amber</button></div>
       <b>Panel security</b><div style="margin:8px 0 18px"><button onclick="openDlg('pw')">Change panel password</button></div>
-      <b>Start command</b><textarea id="scmd" rows="2" style="margin:6px 0 8px;font-family:monospace"></textarea>
-      <b>Stop command</b> <span class="mut">(sent to the console when you click Stop; blank force-terminates)</span><input id="stcmd" style="margin:6px 0 14px;font-family:monospace">
+      <div class="field">
+        <label>Start command</label>
+        <span class="mut">The exact command used to launch the server.</span>
+        <textarea id="scmd" rows="3" class="codebox"></textarea>
+      </div>
+      <div class="field">
+        <label>Stop command</label>
+        <span class="mut">One command per line, sent to the console in order when you click Stop. Add <code>wait(10)</code> on its own line to pause that many seconds (e.g. save, then wait, then stop). Leave empty to force-terminate immediately.</span>
+        <textarea id="stcmd" rows="4" class="codebox" placeholder="save-all&#10;wait(5)&#10;stop"></textarea>
+      </div>
       <div class="row" style="margin-bottom:18px"><button class="p" onclick="saveCommands()">Save commands</button></div>
       <hr style="border:0;border-top:1px solid var(--bd);margin:20px 0"><b>Danger zone</b>
       <div class="mut" style="margin:6px 0 10px">Deleting a server removes it and all its files permanently.</div>
@@ -123,11 +134,11 @@ button.sm{padding:3px 8px;font-size:12px}
   <div id="wver"><label>Version <span class="mut" id="wvs"></span></label><select id="wv"></select></div>
   <div id="wjava" class="hide"><label>Java version for your jar</label><select id="wj"><option value="21">Java 21</option><option value="17">Java 17</option><option value="8">Java 8</option></select></div>
   <div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label>Port</label><input id="wp" type="number" value="25565"></div><div style="flex:1" id="wrw"><label>RAM (GB)</label><input id="wr" type="number" step="0.5" value="2"></div></div>
-  <div id="wworld" class="hide row" style="flex-wrap:nowrap">
-    <div style="flex:1"><label>World size</label><select id="wws"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></div>
-    <div style="flex:1"><label>World type</label><select id="wwt"><option value="random">Random</option><option value="corrupt">Corruption</option><option value="crimson">Crimson</option></select></div>
+  <div id="wworld" class="hide">
+    <label>World size</label><select id="wws"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select>
+    <div class="mut" style="margin-top:6px">Corruption/Crimson can't be forced when auto-generating a world - Terraria's server always picks randomly. To choose, generate the world yourself and upload it in the Files tab afterwards.</div>
   </div>
-  <div id="wpwd" class="hide"><label>Server password (5-30 letters/numbers)</label><input id="wpw"></div>
+  <div id="wpwd" class="hide"><label>Server password (optional)</label><input id="wpw"><div class="mut" style="margin-top:4px">Only required for a publicly-listed server, which this panel never creates. If set, use 5-30 letters/numbers, different from the world name "Dedicated".</div></div>
   <div id="weula" class="mut" style="margin-top:8px">By creating a Minecraft server you accept the <a class="l" href="https://aka.ms/MinecraftEULA" target="_blank">Minecraft EULA</a>. Java is downloaded automatically.</div>
   <div id="wcw" class="hide"><label>Start command (runs inside the server's folder; upload files in the Files tab)</label><textarea id="wc" rows="3"></textarea></div>
   <div class="row" style="margin-top:16px;justify-content:space-between"><button onclick="$('wiz').classList.remove('show')">Cancel</button><button class="p" id="wgo" onclick="createServer()">Create &amp; download</button></div>
@@ -321,7 +332,7 @@ function createServer() {
   run(api('/api/servers', { method: 'POST', body: {
     game: $('wg').value, name: $('wn').value, engine: $('we').value, version: $('wv').value, java: $('wj').value,
     port: $('wp').value, ram: $('wr').value, password: $('wpw').value, startCmd: $('wc').value,
-    worldSize: $('wws').value, worldType: $('wwt').value
+    worldSize: $('wws').value
   } }).then((s) => { $('wiz').classList.remove('show'); return loadServers().then(() => selectServer(s.id)); }));
 }
 let dmode = '';
