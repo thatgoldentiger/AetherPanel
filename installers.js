@@ -150,13 +150,17 @@ function build(o, extra) {
     const mb = Math.round(o.ram * 1024);
     if (o.game === 'minecraft') return { startCmd: `${javaBin(o.java)} -Xms${Math.min(512, mb)}M -Xmx${mb}M -jar server.jar nogui`, stopCmd: 'stop', env: {} };
     if (o.game === 'terraria') {
+        // Terraria's dedicated server has no flag to force Corruption/Crimson on a generated world - it always
+        // picks randomly. The only way to choose is generating the world yourself and uploading it (Files tab).
         const size = { small: 1, medium: 2, large: 3 }[extra.worldSize] || 2;
-        const evil = extra.worldType === 'corrupt' ? ' -setworldevil 0' : extra.worldType === 'crimson' ? ' -setworldevil 1' : '';
-        return { startCmd: `./TerrariaServer.bin.x86_64 -port ${o.port} -maxplayers 8 -world ./worlds/world.wld -worldname "${o.name}" -autocreate ${size}${evil}`, stopCmd: 'exit', env: {} };
+        return { startCmd: `./TerrariaServer.bin.x86_64 -port ${o.port} -maxplayers 8 -world ./worlds/world.wld -worldname "${o.name}" -autocreate ${size}`, stopCmd: 'exit', env: {} };
     }
     if (o.game === 'tmodloader') return { startCmd: `bash start-tModLoaderServer.sh -server -steam_p ${o.port} -worldname "${o.name}" -autocreate 2`, stopCmd: 'exit', env: {} };
+    // A password is only required by Valheim when the server is publicly listed; this panel always creates
+    // unlisted (-public 0) servers, so the flag is only added when the user actually sets one.
+    const pwFlag = extra.password ? ` -password "${extra.password}"` : '';
     return {
-        startCmd: `./valheim_server.x86_64 -nographics -batchmode -name "${o.name}" -port ${o.port} -world "Dedicated" -password "${extra.password}" -public 0 -savedir ./save`,
+        startCmd: `./valheim_server.x86_64 -nographics -batchmode -name "${o.name}" -port ${o.port} -world "Dedicated" -public 0${pwFlag} -savedir ./save`,
         stopCmd: '',
         env: { LD_LIBRARY_PATH: './linux64', SteamAppId: '892970' }
     };
