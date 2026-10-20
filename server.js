@@ -285,6 +285,35 @@ app.patch('/api/servers/:id', async (req, res) => {
     res.json({ ...s, status: statusOf(s.id) });
 });
 
+// ---------- change version / software ----------
+app.post('/api/servers/:id/version', async (req, res) => {
+    const s = find(req.params.id);
+    if (procs.has(s.id) || installing.has(s.id)) return res.status(400).json({ error: 'Stop the server before changing its version' });
+    if (s.game === 'custom' || s.engine === 'customjar') return res.status(400).json({ error: 'This server has no version to change - upload new files in the Files tab instead' });
+    try {
+        const b = req.body || {};
+        const engine = s.game === 'minecraft' ? String(b.engine || s.engine) : s.engine;
+        if (s.game === 'minecraft' && (engine === 'customjar' || !inst.ENGINES.includes(engine))) return res.status(400).json({ error: 'Unknown software' });
+        const list = await inst.versions(s.game, engine);
+        const version = String(b.version || '');
+        if (!list.some((v) => v.value === version)) return res.status(400).json({ error: 'Unknown version' });
+        s.engine = engine;
+        s.version = version;
+        if (s.game === 'minecraft') {
+            s.java = await inst.javaFor(version);
+            s.startCmd = inst.build(s, {}).startCmd; // regenerate (Java path / engine may have changed); stopCmd is left as-is
+        }
+        const all = load();
+        const idx = all.findIndex((x) => x.id === s.id);
+        all[idx] = s;
+        save(all);
+        installServer(s); // re-downloads/reinstalls in place; existing world/save data is untouched
+        res.json({ ok: true, ...s, status: statusOf(s.id) });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to start update: ' + e.message });
+    }
+});
+
 // ---------- server icon ----------
 const iconUpload = multer({
     limits: { fileSize: 2 * 1024 * 1024 },
