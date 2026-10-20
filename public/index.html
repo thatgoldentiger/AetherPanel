@@ -87,6 +87,19 @@ button.sm{padding:3px 8px;font-size:12px}
       <div class="row" style="margin:8px 0 18px"><input id="rname" style="flex:1"><button class="p" onclick="renameServer()">Save</button></div>
       <b>Server icon</b>
       <div class="row" style="margin:8px 0 18px"><span id="icurrent" class="icon-lg"></span><button onclick="$('icon').click()">Change icon</button><input type="file" id="icon" accept="image/*" class="visually-hidden" tabindex="-1" onchange="uploadIcon(this)"></div>
+      <div class="field" id="verFields">
+        <label>Change version / software</label>
+        <span class="mut">Updates the server files in place (your world/save is kept) and reinstalls. The server must be stopped first.</span>
+        <div class="row" style="flex-wrap:nowrap;margin-top:6px">
+          <select id="vEngine" class="hide" style="flex:1" onchange="refreshVerOptions()">
+            <option value="paper">Paper</option><option value="vanilla">Vanilla</option><option value="purpur">Purpur</option>
+            <option value="fabric">Fabric</option><option value="forge">Forge</option><option value="neoforge">NeoForge</option>
+          </select>
+          <select id="vVersion" style="flex:2"></select>
+          <button class="p" onclick="changeVersion()">Update</button>
+        </div>
+      </div>
+      <div class="field hide" id="verNone"><label>Version</label><span class="mut" id="verNoneText"></span></div>
       <b>Theme</b>
       <div class="row" style="margin:8px 0 18px"><button onclick="theme('blue')">Blue</button><button onclick="theme('emerald')">Emerald</button><button onclick="theme('violet')">Violet</button><button onclick="theme('amber')">Amber</button></div>
       <b>Panel security</b><div style="margin:8px 0 18px"><button onclick="openDlg('pw')">Change panel password</button></div>
@@ -212,6 +225,7 @@ function tab(t) {
   ['console', 'players', 'files', 'settings'].forEach((x) => { $('v-' + x).classList.toggle('hide', x !== t); $('t-' + x).classList.toggle('on', x === t); });
   if (t === 'files') loadFiles();
   if (t === 'players') loadPlayers();
+  if (t === 'settings') loadSettingsVersions();
 }
 function theme(t) { document.documentElement.dataset.theme = t; localStorage.setItem('ap_theme', t); }
 theme(localStorage.getItem('ap_theme') || 'blue');
@@ -306,6 +320,37 @@ function uploadIcon(inp) {
   const fd = new FormData(); fd.append('icon', inp.files[0]);
   run(api(`/api/servers/${cur}/icon`, { method: 'POST', body: fd }).then(loadServers));
   inp.value = '';
+}
+
+// ----- change version -----
+async function loadSettingsVersions() {
+  const s = servers.find((x) => x.id === cur); if (!s) return;
+  const isCustom = s.game === 'custom' || s.engine === 'customjar';
+  show('verFields', !isCustom); show('verNone', isCustom);
+  if (isCustom) {
+    $('verNoneText').textContent = s.game === 'custom' ? 'Custom servers have no version - edit the start command above, or upload new files in the Files tab.' : 'This server runs a jar you uploaded yourself - upload a new one in the Files tab to change version.';
+    return;
+  }
+  show('vEngine', s.game === 'minecraft');
+  if (s.game === 'minecraft') $('vEngine').value = s.engine;
+  await refreshVerOptions();
+}
+async function refreshVerOptions() {
+  const s = servers.find((x) => x.id === cur); if (!s) return;
+  const engine = s.game === 'minecraft' ? $('vEngine').value : '';
+  $('vVersion').innerHTML = '<option>Loading...</option>';
+  try {
+    const l = await api(`/api/versions?game=${s.game}&engine=${engine}`);
+    $('vVersion').innerHTML = l.map((v) => `<option value="${esc(v.value)}" ${v.value === s.version ? 'selected' : ''}>${esc(v.label)}</option>`).join('');
+  } catch (e) { $('vVersion').innerHTML = `<option>Failed: ${esc(e.message)}</option>`; }
+}
+function changeVersion() {
+  const s = servers.find((x) => x.id === cur);
+  if (!s || s.status !== 'OFFLINE') return alert('Stop the server first.');
+  if (!confirm('Reinstall this server at the selected version now? Your world/save data is kept.')) return;
+  const body = { version: $('vVersion').value };
+  if (s.game === 'minecraft') body.engine = $('vEngine').value;
+  run(api(`/api/servers/${cur}/version`, { method: 'POST', body }).then(() => { tab('console'); loadServers(); alert('Update started - watch the Console tab for progress.'); }));
 }
 
 // ----- wizard / delete -----
