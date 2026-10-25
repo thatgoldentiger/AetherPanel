@@ -27,6 +27,7 @@ button.sm{padding:3px 8px;font-size:12px}
 #selrow{display:flex;gap:8px;overflow-x:auto;max-width:60vw;padding:2px}
 .sbtn{display:flex;align-items:center;gap:6px;white-space:nowrap;background:#0f172a;border:1px solid var(--bd);border-radius:20px;padding:5px 12px 5px 5px;cursor:pointer}
 .sbtn.on{border-color:var(--ac);background:#132036}.sbtn img,.sbtn .em{width:22px;height:22px;border-radius:50%;object-fit:cover;display:flex;align-items:center;justify-content:center;background:#1e293b;font-size:14px}
+.em svg,.icon-lg svg{width:70%;height:70%}
 .icon-lg{width:56px;height:56px;border-radius:12px;overflow:hidden;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0}
 .icon-lg img{width:100%;height:100%;object-fit:cover;display:block}
 .field{margin:14px 0}.field>label{display:block;font-weight:600;margin-bottom:3px}.field>.mut{display:block;margin-bottom:6px}
@@ -108,16 +109,24 @@ button.sm{padding:3px 8px;font-size:12px}
         <span class="mut">The exact command used to launch the server.</span>
         <textarea id="scmd" rows="3" class="codebox"></textarea>
       </div>
-      <div class="field">
+      <div class="field hide" id="stopFields">
         <label>Stop command</label>
         <span class="mut">One command per line, sent to the console in order when you click Stop. Add <code>wait(10)</code> on its own line to pause that many seconds (e.g. save, then wait, then stop). Leave empty to force-terminate immediately.</span>
         <textarea id="stcmd" rows="4" class="codebox" placeholder="save-all&#10;wait(5)&#10;stop"></textarea>
       </div>
-      <div class="row" style="margin-bottom:18px"><button class="p" onclick="saveCommands()">Save commands</button></div>
+      <div class="field hide" id="stopNone"><label>Stop command</label><span class="mut" id="stopNoneText"></span></div>
+      <div class="row hide" id="stopSaveRow" style="margin-bottom:18px"><button class="p" onclick="saveCommands()">Save commands</button></div>
+      <div class="field hide" id="asFields">
+        <label>Auto-save</label>
+        <span class="mut">Runs the commands below automatically while the server is running, every N minutes (0 = off). Same <code>wait(10)</code> syntax as the stop commands. Takes effect next time the server starts.</span>
+        <div class="row" style="margin-top:6px"><input id="asmin" type="number" min="0" max="1440" style="width:100px"><span class="mut">minutes</span></div>
+        <textarea id="ascmd" rows="2" class="codebox" style="margin-top:6px" placeholder="save-all"></textarea>
+      </div>
+      <div class="row hide" id="asSaveRow" style="margin-bottom:18px"><button class="p" onclick="saveAutosave()">Save auto-save settings</button></div>
       <hr style="border:0;border-top:1px solid var(--bd);margin:20px 0"><b>Danger zone</b>
       <div class="mut" style="margin:6px 0 10px">Deleting a server removes it and all its files permanently.</div>
       <div class="row"><button class="r" onclick="delServer()">Delete this server and all its files</button></div>
-      <div class="mut" style="margin:16px 0 10px">This removes the whole panel, Playit and (optionally) every game server from this machine.</div>
+      <div class="mut" style="margin:16px 0 10px">This removes the whole panel and (optionally) every game server from this machine.</div>
       <div class="row"><button class="r" onclick="openDlg('un')">Uninstall AetherPanel</button></div>
     </div>
   </div>
@@ -171,7 +180,13 @@ button.sm{padding:3px 8px;font-size:12px}
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ICON = { minecraft: '\u26cf\ufe0f', terraria: '\ud83c\udf33', tmodloader: '\ud83e\udde9', valheim: '\u2694\ufe0f', custom: '\u2699\ufe0f' };
+const ICON = {
+  minecraft: '<svg viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l4-4 4 4-4 4-4-4z" fill="#b45309" stroke="none"/><path d="M11 6l7-3 3 3-3 7-4-1-3-6z"/></svg>',
+  terraria: '<svg viewBox="0 0 24 24" fill="#16a34a" stroke="none"><rect x="10.5" y="15" width="3" height="6" fill="#92400e"/><path d="M12 2c4 3 7 7 7 10a7 7 0 1 1-14 0c0-3 3-7 7-10z"/></svg>',
+  tmodloader: '<svg viewBox="0 0 24 24" fill="#16a34a" stroke="none"><rect x="10.5" y="15" width="3" height="6" fill="#92400e"/><path d="M12 2c4 3 7 7 7 10a7 7 0 1 1-14 0c0-3 3-7 7-10z"/><circle cx="17" cy="17" r="5" fill="#0b0f19"/><circle cx="17" cy="17" r="4" fill="#94a3b8"/></svg>',
+  valheim: '<svg viewBox="0 0 24 24" fill="#d6d3d1" stroke="none"><path d="M3 11c2-1 4-5 9-5s7 4 9 5c-2 3-5 4-9 4s-7-1-9-4z"/><path d="M2 10c1-3 3-5 4-5l-1 4-3 1z"/><path d="M22 10c-1-3-3-5-4-5l1 4 3 1z"/><rect x="10" y="13" width="4" height="7" rx="1"/></svg>',
+  custom: '<svg viewBox="0 0 24 24" fill="#94a3b8" stroke="none"><path d="M12 8a4 4 0 100 8 4 4 0 000-8zm9 4a7 7 0 01-.1 1.2l2 1.6-2 3.4-2.3-.9a7 7 0 01-2 1.2L16 22h-4l-.6-2.5a7 7 0 01-2-1.2l-2.3.9-2-3.4 2-1.6A7 7 0 017 12a7 7 0 01.1-1.2L5 9.2l2-3.4 2.3.9a7 7 0 012-1.2L12 2h4l.6 2.5a7 7 0 012 1.2l2.3-.9 2 3.4-2 1.6A7 7 0 0121 12z"/></svg>'
+};
 let token = localStorage.getItem('ap_token'), cur = localStorage.getItem('ap_cur'), servers = [], ws = null, cwd = '', editing = '', hist = [];
 let upStart = null, upSecs = 0, upTimer = null;
 
@@ -195,7 +210,8 @@ async function doLogin(e) {
 function logout() { showLogin(); }
 
 async function init() { $('app').classList.remove('hide'); await loadServers(); }
-function icon(s) { return s.icon ? `<img src="${s.icon}">` : `<span class="em">${ICON[s.game] || '\ud83c\udfae'}</span>`; }
+const DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="#94a3b8"><circle cx="12" cy="12" r="9"/></svg>';
+function icon(s) { return s.icon ? `<img src="${s.icon}">` : `<span class="em">${ICON[s.game] || DEFAULT_ICON}</span>`; }
 async function loadServers() {
   servers = await api('/api/servers');
   if (!servers.find((s) => s.id === cur)) cur = servers[0] && servers[0].id;
@@ -205,7 +221,12 @@ async function loadServers() {
   $('sname').textContent = s.name; $('sbadge').textContent = s.status; $('sbadge').className = 'badge ' + s.status;
   $('smeta').textContent = `${s.game}${s.engine ? ' (' + s.engine + ')' : ''}${s.version ? ' ' + s.version : ''} - port ${s.port}`;
   $('rname').value = s.name; $('scmd').value = s.startCmd || ''; $('stcmd').value = s.stopCmd || '';
+  $('asmin').value = s.autosaveMinutes || 0; $('ascmd').value = s.autosaveCmd || '';
   $('icurrent').innerHTML = icon(s);
+  const isValheim = s.game === 'valheim';
+  show('stopFields', !isValheim); show('stopSaveRow', !isValheim); show('asFields', !isValheim); show('asSaveRow', !isValheim);
+  show('stopNone', isValheim);
+  if (isValheim) $('stopNoneText').textContent = "Valheim's dedicated server has no console to send commands to - typed commands only work from a connected player in-game. It saves automatically every few minutes via its own -saveinterval setting, and does a full save on a clean Stop/Restart (not Kill). Change the interval by editing the start command's -saveinterval value.";
   if (!ws && token && cur) connectWs();
 }
 function selectServer(id) { cur = id; localStorage.setItem('ap_cur', id); cwd = ''; hist = []; stopUptime(); connectWs(); loadServers(); if (!$('v-files').classList.contains('hide')) loadFiles(); if (!$('v-players').classList.contains('hide')) loadPlayers(); }
@@ -315,6 +336,7 @@ function uploadFiles(inp) {
 // ----- settings: rename / commands / icon -----
 function renameServer() { run(api(`/api/servers/${cur}`, { method: 'PATCH', body: { name: $('rname').value } }).then(loadServers)); }
 function saveCommands() { run(api(`/api/servers/${cur}`, { method: 'PATCH', body: { startCmd: $('scmd').value, stopCmd: $('stcmd').value } }).then(() => { loadServers(); alert('Saved. Restart the server for a new start command to take effect.'); })); }
+function saveAutosave() { run(api(`/api/servers/${cur}`, { method: 'PATCH', body: { autosaveMinutes: $('asmin').value, autosaveCmd: $('ascmd').value } }).then(() => { loadServers(); alert('Saved. Takes effect next time the server starts.'); })); }
 function uploadIcon(inp) {
   if (!inp.files || !inp.files[0]) return;
   const fd = new FormData(); fd.append('icon', inp.files[0]);
