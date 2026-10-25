@@ -15,7 +15,7 @@ done
 if [ "$EUID" -ne 0 ]; then echo "Please run as root: sudo bash uninstall.sh"; exit 1; fi
 
 if [ "$YES" -eq 0 ]; then
-  read -r -p "This removes AetherPanel, Playit and SteamCMD. Continue? [y/N] " A < /dev/tty
+  read -r -p "This removes AetherPanel and SteamCMD. Continue? [y/N] " A < /dev/tty
   [[ "$A" =~ ^[Yy]$ ]] || { echo "Cancelled."; exit 0; }
   if [ -z "$KEEP" ]; then
     read -r -p "Also DELETE all game servers and worlds in $INSTALL_DIR/data? [y/N] " A < /dev/tty
@@ -32,12 +32,11 @@ fi
 [ "$DETACHED" -eq 1 ] && sleep 3
 
 echo "Stopping services..."
-systemctl disable --now aetherpanel playit 2> /dev/null
-rm -f /etc/systemd/system/aetherpanel.service /etc/systemd/system/playit.service /etc/sudoers.d/aetherpanel
+systemctl disable --now aetherpanel 2> /dev/null
+rm -f /etc/systemd/system/aetherpanel.service /etc/sudoers.d/aetherpanel
 systemctl daemon-reload
 
 echo "Removing files..."
-rm -f /usr/local/bin/playit
 rm -rf /opt/steamcmd
 if command -v ufw &> /dev/null; then
   for r in 3000/tcp 25565/tcp 7777/tcp 2456:2458/udp; do ufw delete allow "$r" > /dev/null 2>&1; done
