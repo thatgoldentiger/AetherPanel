@@ -158,9 +158,15 @@ function build(o, extra) {
     if (o.game === 'tmodloader') return { startCmd: `bash start-tModLoaderServer.sh -server -steam_p ${o.port} -worldname "${o.name}" -autocreate 2`, stopCmd: 'exit', env: {} };
     // A password is only required by Valheim when the server is publicly listed; this panel always creates
     // unlisted (-public 0) servers, so the flag is only added when the user actually sets one.
+    // IMPORTANT: the vanilla dedicated server does not read commands from stdin at all (unlike Minecraft/Terraria) -
+    // "save"/kick/ban only exist as in-game admin commands a connected player sends over the network. The only
+    // real ways to make it save are its own periodic -saveinterval flag and a clean SIGTERM/SIGINT shutdown
+    // (which the server catches and uses to flush a save before exiting). stopCmd is deliberately left empty so
+    // the panel always uses a plain SIGTERM for Stop/Restart, and no stdin "commands" are ever offered for it.
     const pwFlag = extra.password ? ` -password "${extra.password}"` : '';
+    const interval = Math.max(60, parseInt(extra.saveInterval) || 600); // default 10 min (vanilla default is 30 min)
     return {
-        startCmd: `./valheim_server.x86_64 -nographics -batchmode -name "${o.name}" -port ${o.port} -world "Dedicated" -public 0${pwFlag} -savedir ./save`,
+        startCmd: `./valheim_server.x86_64 -nographics -batchmode -name "${o.name}" -port ${o.port} -world "Dedicated" -public 0${pwFlag} -saveinterval ${interval} -savedir ./save`,
         stopCmd: '',
         env: { LD_LIBRARY_PATH: './linux64', SteamAppId: '892970' }
     };
