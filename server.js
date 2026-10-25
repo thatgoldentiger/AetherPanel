@@ -105,16 +105,38 @@ function start(s) {
     child.on('error', (e) => log(s.id, `[System] Failed to start: ${e.message}\n`));
     child.on('close', (code, sig) => {
         procs.delete(s.id);
+        clearInterval(autosaveTimers.get(s.id));
+        autosaveTimers.delete(s.id);
         players.onClose(s.id);
         log(s.id, `\n[System] Process exited (code ${code}${sig ? ', signal ' + sig : ''})\n`);
         send(s.id, { type: 'status' });
     });
     log(s.id, `[System] Starting: ${s.startCmd}\n`);
     send(s.id, { type: 'status' });
+    clearInterval(autosaveTimers.get(s.id));
+    const mins = parseInt(s.autosaveMinutes) || 0;
+    if (mins > 0 && s.autosaveCmd) {
+        autosaveTimers.set(s.id, setInterval(() => {
+            if (procs.get(s.id) !== child) return;
+            log(s.id, '[System] Running scheduled auto-save...\n');
+            runScript(s.id, child, s.autosaveCmd).catch(() => {});
+        }, mins * 60000));
+    }
     return null;
 }
 
-async function runStopScript(id, c, script) {
+const autosaveTimers = new Map(); // server id -> interval handle
+// How long to wait after asking a server to stop before forcing it. Valheim can take well over a minute to write
+// a save for a built-up world, and force-killing it mid-save is exactly how progress gets lost.
+const GRACE = {
+    valheim: { term: 90000, kill: 160000 },
+    minecraft: { term: 20000, kill: 40000 },
+    terraria: { term: 15000, kill: 30000 },
+    tmodloader: { term: 15000, kill: 30000 },
+    custom: { term: 20000, kill: 40000 }
+};
+
+async function runScript(id, c, script) {
     const lines = String(script || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     for (const line of lines) {
         if (procs.get(id) !== c) return; // process already gone (closed, or replaced by a new start)
@@ -131,10 +153,11 @@ function stop(s, force) {
         c.once('close', resolve);
         if (force) return c.kill('SIGKILL');
         const script = s.stopCmd || { minecraft: 'stop', terraria: 'exit', tmodloader: 'exit' }[s.game] || '';
-        if (script) runStopScript(s.id, c, script).catch(() => {});
-        else c.kill('SIGTERM');
-        setTimeout(() => procs.has(s.id) && c.kill('SIGTERM'), 25000);
-        setTimeout(() => procs.has(s.id) && c.kill('SIGKILL'), 45000);
+        if (script) runScript(s.id, c, script).catch(() => {});
+        else c.kill('SIGTERM'); // Valheim (and anything with no stop script) - a clean signal, not a forced kill
+        const g = GRACE[s.game] || GRACE.custom;
+        setTimeout(() => procs.has(s.id) && c.kill('SIGTERM'), g.term);
+        setTimeout(() => procs.has(s.id) && c.kill('SIGKILL'), g.kill);
     });
 }
 
@@ -201,6 +224,8 @@ app.post('/api/servers', async (req, res) => {
             const worldSize = ['small', 'medium', 'large'].includes(b.worldSize) ? b.worldSize : 'medium';
             Object.assign(s, inst.build(s, { password: pw, worldSize }));
         }
+        s.autosaveMinutes = 0;
+        s.autosaveCmd = { minecraft: 'save-all', terraria: 'save' }[game] || '';
         await fs.ensureDir(safe(s.id));
         if (game === 'minecraft') {
             await fs.writeFile(path.join(safe(s.id), 'server.properties'), `server-port=${port}\nmotd=${name}\nmax-players=20\n`);
@@ -279,7 +304,12 @@ app.patch('/api/servers/:id', async (req, res) => {
         if (!v) return res.status(400).json({ error: 'Start command cannot be empty' });
         s.startCmd = v;
     }
-    if ('stopCmd' in b) s.stopCmd = String(b.stopCmd || '').trim().slice(0, 200);
+    if (('stopCmd' in b || 'autosaveCmd' in b) && s.game === 'valheim' && (String(b.stopCmd || '').trim() || String(b.autosaveCmd || '').trim())) {
+        return res.status(400).json({ error: "Valheim's dedicated server has no console to send commands to - it only saves via its built-in interval or a clean stop. Edit the -saveinterval value in the start command instead." });
+    }
+    if ('stopCmd' in b) s.stopCmd = s.game === 'valheim' ? '' : String(b.stopCmd || '').trim().slice(0, 200);
+    if ('autosaveMinutes' in b) s.autosaveMinutes = s.game === 'valheim' ? 0 : Math.max(0, Math.min(1440, parseInt(b.autosaveMinutes) || 0));
+    if ('autosaveCmd' in b) s.autosaveCmd = s.game === 'valheim' ? '' : String(b.autosaveCmd || '').trim().slice(0, 300);
     all[idx] = s;
     save(all);
     res.json({ ...s, status: statusOf(s.id) });
@@ -446,7 +476,7 @@ wss.on('connection', (ws, req) => {
 // Stop all game servers cleanly when the panel stops
 function shutdown() {
     Promise.all(load().map((s) => stop(s, false))).then(() => process.exit(0));
-    setTimeout(() => process.exit(0), 20000);
+    setTimeout(() => process.exit(0), 180000); // just past GRACE.valheim.kill, so a Valheim save is never cut off by this
 }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
