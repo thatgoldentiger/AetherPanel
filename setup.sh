@@ -31,7 +31,7 @@ if [ -z "$PASS" ]; then
 fi
 if [ "$PASS" != "__KEEP__" ] && [ "${#PASS}" -lt 8 ]; then echo "Password must be at least 8 characters."; exit 1; fi
 
-echo "[1/7] Installing system packages..."
+echo "[1/6] Installing system packages..."
 if command -v apt-get &> /dev/null; then
   dpkg --add-architecture i386 || true
   apt-get update -y
@@ -42,7 +42,7 @@ elif command -v dnf &> /dev/null; then
   dnf install -y curl wget git unzip tar sudo ca-certificates screen glibc.i686 libstdc++.i686 || true
 fi
 
-echo "[2/7] Installing Node.js 20..."
+echo "[2/6] Installing Node.js 20..."
 # Reinstall from NodeSource if node is missing, too old, or npm is missing (distro nodejs often has no npm)
 if ! command -v node &> /dev/null || ! command -v npm &> /dev/null || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 18 ]; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -57,21 +57,18 @@ fi
 if ! command -v npm &> /dev/null; then echo "Could not install npm automatically. Please install it manually and re-run this script."; exit 1; fi
 NODE_BIN="$(command -v node)"
 
-echo "[3/7] Installing Java (system copy; the panel also fetches the exact version each server needs)..."
+echo "[3/6] Installing Java (system copy; the panel also fetches the exact version each server needs)..."
 if command -v apt-get &> /dev/null; then
   apt-get install -y openjdk-21-jre-headless || apt-get install -y openjdk-17-jre-headless || true
 else
   dnf install -y java-21-openjdk-headless || dnf install -y java-17-openjdk-headless || true
 fi
 
-echo "[4/7] Installing SteamCMD (Valheim) and Playit.gg..."
+echo "[4/6] Installing SteamCMD (for Valheim and tModLoader)..."
 mkdir -p /opt/steamcmd
 curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar xz -C /opt/steamcmd
-case "$(uname -m)" in aarch64|arm64) PLAYIT=playit-linux-aarch64 ;; *) PLAYIT=playit-linux-amd64 ;; esac
-curl -fsSL "https://github.com/playit-cloud/playit-agent/releases/latest/download/$PLAYIT" -o /usr/local/bin/playit
-chmod +x /usr/local/bin/playit
 
-echo "[5/7] Installing panel files to $INSTALL_DIR..."
+echo "[5/6] Installing panel files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR/public" "$INSTALL_DIR/data/servers"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" 2>/dev/null && pwd )"
 if [ -f "$SCRIPT_DIR/server.js" ] && [ -f "$SCRIPT_DIR/installers.js" ] && [ -f "$SCRIPT_DIR/players.js" ] && [ -f "$SCRIPT_DIR/public/index.html" ]; then
@@ -103,10 +100,9 @@ S
 chmod 440 /etc/sudoers.d/aetherpanel
 visudo -cf /etc/sudoers.d/aetherpanel > /dev/null || rm -f /etc/sudoers.d/aetherpanel
 
-echo "[6/7] Pre-downloading Java 21, 17 and 8 (this can take a minute)..."
+echo "[6/6] Pre-downloading Java 21, 17 and 8, and registering services..."
 runuser -u aether -- node "$INSTALL_DIR/installers.js" prefetch || true
 
-echo "[7/7] Registering services and firewall rules..."
 cat > /etc/systemd/system/aetherpanel.service <<UNIT
 [Unit]
 Description=AetherPanel Game Management Daemon
@@ -120,27 +116,9 @@ Environment=NODE_ENV=production PORT=3000
 ExecStart=$NODE_BIN /opt/aetherpanel/server.js
 Restart=always
 RestartSec=5
-TimeoutStopSec=60
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-cat > /etc/systemd/system/playit.service <<'UNIT'
-[Unit]
-Description=Playit.gg Tunneling Agent
-After=network.target
-
-[Service]
-Type=simple
-User=aether
-WorkingDirectory=/opt/aetherpanel
-ExecStart=/usr/local/bin/playit
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
+# Generous on purpose: Valheim in particular can take well over a minute to write a save on a clean stop,
+# and this must not be shorter than the panel's own internal stop timeout or a save can be cut off mid-write.
+TimeoutStopSec=300
 UNIT
 
 if command -v ufw &> /dev/null; then
@@ -153,18 +131,16 @@ if command -v ufw &> /dev/null; then
 fi
 
 systemctl daemon-reload
-systemctl enable aetherpanel playit
+systemctl enable aetherpanel
 systemctl restart aetherpanel
-systemctl restart playit
 
 IP_ADDR=$(hostname -I | awk '{print $1}')
 echo "===================================================="
 echo " AetherPanel installed!"
-echo " Panel:  $(systemctl is-active aetherpanel)"
-echo " Playit: $(systemctl is-active playit)"
-echo " URL:    http://${IP_ADDR}:3000"
+echo " Panel: $(systemctl is-active aetherpanel)"
+echo " URL:   http://${IP_ADDR}:3000"
 echo " Log in with the password you just chose."
-echo " Playit claim link: sudo journalctl -u playit -n 20 --no-pager"
 echo " Uninstall: sudo aetherpanel-uninstall (or the button in Settings)"
 echo " Note: Terraria/tModLoader use TCP; Valheim uses UDP; Minecraft uses TCP."
+echo " You'll need to forward/open these ports on your router yourself to play from outside your network."
 echo "===================================================="
