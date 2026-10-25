@@ -1,6 +1,6 @@
 # AetherPanel
 
-Self-hosted game server panel: password login, one-click server creation with automatic downloads, start/stop/restart, live console, a Players tab (kick/ban/op), a file manager and editor, per-server icons, and renaming.
+Self-hosted game server panel: password login, one-click server creation with automatic downloads, start/stop/restart, live console, a Players tab (kick/ban/op), a file manager and editor, per-server icons, renaming, and the ability to change a server's version in place.
 
 ## Install (Ubuntu/Debian)
 
@@ -10,8 +10,10 @@ cd AetherPanel
 sudo bash setup.sh
 ```
 
-The script asks you to choose the panel password, then installs Node.js, Java, SteamCMD, 32-bit libraries and Playit.gg.
+The script asks you to choose the panel password, then installs Node.js, Java, SteamCMD and 32-bit libraries.
 Non-interactive: `sudo AETHER_PASSWORD='yourpassword' bash setup.sh`
+
+To play from outside your home network, forward the relevant port(s) on your router to this machine's local IP - the panel doesn't set up or depend on any tunnelling service.
 
 ## Uninstall
 
@@ -28,21 +30,26 @@ Open **+ New Server**, pick a game, and the version dropdown loads live from the
 - **Paper, Purpur, Fabric, Vanilla**: pick a Minecraft version; the matching server file downloads automatically, along with the exact Java release that version needs.
 - **Forge / NeoForge**: pick a Minecraft version; the panel downloads the recommended Forge/NeoForge installer for that version, runs it, and detects the resulting launch script (`run.sh`) or jar automatically. This detection is newer and less tested than the others - if a modded server doesn't start, check the Files tab for what actually got installed and fix the **Start command** in Settings.
 - **Custom (upload your own jar)**: skips downloading anything. After creating the server, go to Files and upload your file as `server.jar`, then press Start.
-- Port forwarding/Playit: Minecraft uses **TCP**.
+- Port forwarding: Minecraft uses **TCP**.
 - Accepting the EULA is required and handled automatically (`eula.txt` is written for you).
 
 ### Terraria
-- Pick an official server version, a world size (Small/Medium/Large) and a world type (Random/Corruption/Crimson). A new world is created on first start.
-- Port forwarding/Playit: Terraria uses **TCP**, not UDP - if you can't connect, this is the most common cause. (An earlier version of this panel's firewall script opened the wrong protocol; `setup.sh` now opens 7777/tcp.)
+- Pick an official server version and a world size. A new world is created on first start.
+- There is no way to force Corruption or Crimson on an auto-generated world - the dedicated server always picks randomly. To choose a biome, generate the world yourself and upload it in the Files tab.
+- Port forwarding: Terraria uses **TCP**, not UDP.
 - Vanilla Terraria has no "operator" concept, so the Players tab only offers Kick and Ban for it, with no reason field (vanilla ignores it) and no guaranteed unban without a restart.
 
 ### Terraria + tModLoader (experimental)
 - Downloads the tModLoader dedicated server via SteamCMD. This is new and less tested than the other games - the generated start command may need adjusting in Settings depending on the exact build. Mods (`.tmod` files) are uploaded into the `Mods` folder via the Files tab, then enabled with the in-console `enablemods` command.
 
 ### Valheim
-- Only the latest Steam build is offered (Valheim has no public version list). Set a server password (5-30 letters/numbers).
-- Port forwarding/Playit: Valheim uses **UDP** ports 2456-2458.
-- Valheim has no live "kick" from the console. Banning/op-ing works by editing `adminlist.txt`/`bannedlist.txt` (by Steam ID) in the server's save folder; a ban takes effect on that player's next connection attempt rather than instantly.
+- Only the latest Steam build is offered (Valheim has no public version list). A password is **optional** - it's only required by Valheim when a server is publicly listed, and this panel always creates unlisted (`-public 0`) servers.
+- Port forwarding: Valheim uses **UDP** ports 2456-2458.
+- **Important - how Valheim actually saves:** unlike Minecraft and Terraria, the vanilla Valheim dedicated server does not read commands from its console at all - `save`, `kick`, `ban` only exist as in-game admin commands sent by a connected player, over the network, not something the panel can type into the process. Because of that, Valheim servers here don't get the Stop-command/Auto-save-command boxes other games do - they would silently do nothing. Instead:
+  - It saves automatically on its own schedule via a built-in `-saveinterval <seconds>` flag the panel sets (default 10 minutes; edit the number in the start command in Settings to change it).
+  - It writes a full save when cleanly **Stopped or Restarted** (the server catches that signal and flushes a save before exiting) - this is why **Kill should only be used as a last resort**, since it skips that save entirely.
+  - The panel also waits noticeably longer before force-killing a Valheim server on Stop/Restart than it does for other games, specifically so a save in progress on a large world isn't cut off mid-write.
+  - Banning/op-ing works by editing `adminlist.txt`/`bannedlist.txt` (by Steam ID) in the server's save folder; a ban takes effect on that player's next connection attempt rather than instantly. There is no live Kick for Valheim for the same reason as above.
 
 ### Custom command
 - For any other game server. Upload your files in the Files tab and set a Start command; nothing is downloaded automatically.
@@ -54,9 +61,10 @@ Open **+ New Server**, pick a game, and the version dropdown loads live from the
 - **Valheim**: online players (by Steam ID, name only once known) are detected the same way. Ban/Admin edit the list files described above; no live Kick.
 - **Custom servers**: no player management (the panel doesn't know the game's protocol).
 
-## Renaming, icons, and commands
+## Renaming, icons, versions and commands
 
-- **Settings** tab: rename a server, change its icon (defaults to an emoji per game; upload your own PNG/JPG/GIF/WEBP, 2 MB max), and edit its Start and Stop commands directly. The Stop command is what's sent to the console when you click Stop (leave it blank to force-terminate instead); restart the server for a changed Start command to take effect.
+- **Settings** tab: rename a server, change its icon (a small original icon is shown by default for each game - not the official trademarked logos, just a simple generic glyph; upload your own PNG/JPG/GIF/WEBP, 2 MB max, if you'd rather use something else), change its version/software in place (server must be stopped first; your world/save is kept), and edit its Start and Stop commands directly (Valheim excluded - see above). Restart the server for a changed Start command to take effect.
+- An optional **Auto-save** can run commands on an interval while the server is up (not available for Valheim, for the same console-access reason above).
 - Servers are shown as a row of icons at the top of the page instead of a dropdown, so you can tell them apart at a glance.
 
 ## Settings reference
@@ -69,9 +77,8 @@ Open **+ New Server**, pick a game, and the version dropdown loads live from the
 ## Commands
 
 ```bash
-sudo systemctl restart aetherpanel     # also stops running game servers
+sudo systemctl restart aetherpanel     # also stops running game servers - can take a few minutes if a Valheim save is in progress
 sudo journalctl -u aetherpanel -f      # panel logs
-sudo journalctl -u playit -n 20        # Playit claim link
 ```
 
 ## Repo files
