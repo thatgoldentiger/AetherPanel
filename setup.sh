@@ -122,12 +122,18 @@ TimeoutStopSec=300
 UNIT
 
 if command -v ufw &> /dev/null; then
-  ufw allow 22/tcp comment 'SSH'
-  ufw allow 3000/tcp comment 'AetherPanel Dashboard'
-  ufw allow 25565/tcp comment 'Minecraft Java'
-  ufw allow 7777/tcp comment 'Terraria / tModLoader'
-  ufw allow 2456:2458/udp comment 'Valheim'
-  echo "y" | ufw enable || true
+  # Only add rules - never turn the firewall on or off. Doing that unprompted on a shared machine can silently cut
+  # off unrelated services (Jellyfin, CasaOS, etc.) that were relying on no firewall or different rules being active.
+  ufw allow 22/tcp comment 'SSH' || true
+  ufw allow 3000/tcp comment 'AetherPanel Dashboard' || true
+  ufw allow 25565/tcp comment 'Minecraft Java' || true
+  ufw allow 7777/tcp comment 'Terraria / tModLoader' || true
+  ufw allow 2456:2458/udp comment 'Valheim' || true
+  if ufw status | grep -q "^Status: active"; then
+    echo "ufw is active - added AetherPanel's ports to it."
+  else
+    echo "ufw rules for AetherPanel were added but ufw itself is left OFF, as it was before. Run 'sudo ufw enable' yourself if you want it on - this script will not do that for you, since it could block other things you're running."
+  fi
 fi
 
 systemctl daemon-reload
