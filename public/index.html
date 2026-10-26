@@ -227,7 +227,7 @@ async function loadServers() {
   $('asmin').value = s.autosaveMinutes || 0; $('ascmd').value = s.autosaveCmd || '';
   $('icurrent').innerHTML = icon(s);
   const isValheim = s.game === 'valheim';
-  show('stopFields', !isValheim); show('stopSaveRow', !isValheim); show('asFields', !isValheim); show('asSaveRow', !isValheim);
+  show('stopFields', !isValheim); show('asFields', !isValheim); show('asSaveRow', !isValheim);
   show('stopNone', isValheim);
   if (isValheim) $('stopNoneText').textContent = "Valheim's dedicated server has no console to send commands to - typed commands only work from a connected player in-game. It saves automatically every few minutes via its own -saveinterval setting, and does a full save on a clean Stop/Restart (not Kill). Change the interval by editing the start command's -saveinterval value.";
   if (!ws && token && cur) connectWs();
